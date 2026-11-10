@@ -7,6 +7,8 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectRefs } from './refs.mjs';
+import { collectJavaRefs } from './refs-java.mjs';
+import { collectPythonRefs } from './refs-python.mjs';
 
 const repo = resolve(process.argv[2] ?? '.');
 const here = dirname(fileURLToPath(import.meta.url));
@@ -85,11 +87,55 @@ const data = {
   files,
   refs: null,
 };
+// 언어별 참조 결과를 하나로 합친다. 파일 번호는 앞 결과 뒤로 밀어 붙인다.
+function mergeRefs(parts) {
+  const found = parts.filter(Boolean);
+  if (!found.length) return null;
+  const merged = { paths: [], symbols: [], snippets: {} };
+  for (const part of found) {
+    const base = merged.paths.length;
+    const shift = (packed) => (packed ? packed.split('|').map((g) => { const at = g.indexOf(':'); return `${Number(g.slice(0, at)) + base}${g.slice(at)}`; }).join('|') : '');
+    merged.paths.push(...part.paths);
+    for (const [name, defs, refs] of part.symbols) merged.symbols.push([name, shift(defs), shift(refs)]);
+    for (const [p, lines] of Object.entries(part.snippets)) merged.snippets[Number(p) + base] = lines;
+  }
+  return merged;
+}
 const refsStarted = Date.now();
 try {
-  data.refs = collectRefs(repo, files.filter((f) => f.status !== 'D'));
+  const live = files.filter((f) => f.status !== 'D');
+  data.refs = mergeRefs([collectRefs(repo, live), collectJavaRefs(repo, files), collectPythonRefs(repo, files)]);
 } catch (error) {
   console.log(`refs skipped: ${error.message}`);
+}
+// 정의가 변경 없는 파일에 있거나(참조 시트에서 정의로 이동), 열린 코멘트가 변경 목록에서 빠진 파일에 있으면
+// 그 파일 전체를 읽기 전용으로 싣는다. 코멘트 경로는 remap.mjs 가 남긴 comment-paths.json.
+data.context = [];
+{
+  const shownPaths = new Set(files.map((f) => f.path));
+  const ctxPaths = new Set();
+  if (data.refs) for (const [, defs] of data.refs.symbols) for (const group of defs.split('|').filter(Boolean)) {
+    const path = data.refs.paths[Number(group.slice(0, group.indexOf(':')))];
+    if (path && !shownPaths.has(path)) ctxPaths.add(path);
+  }
+  let commentPaths = [];
+  try { commentPaths = JSON.parse(readFileSync(join(state, 'comment-paths.json'), 'utf8')); } catch { /* remap 전 첫 빌드 */ }
+  for (const path of commentPaths) {
+    if (typeof path !== 'string' || shownPaths.has(path)) continue;
+    if (!resolve(repo, path).startsWith(repo + '/')) continue;
+    ctxPaths.add(path);
+  }
+  for (const path of [...ctxPaths].sort()) {
+    let text;
+    try { text = readFileSync(join(repo, path), 'utf8'); } catch { continue; }
+    const lines = text.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+    data.context.push({
+      id: 'f' + createHash('sha1').update(path).digest('hex').slice(0, 8),
+      path, status: 'C', ctx: true, add: 0, del: 0, binary: false,
+      hunks: [{ h: '', ctx: '', lines: lines.map((line, i) => [' ', i + 1, i + 1, line]) }],
+    });
+  }
 }
 const json = JSON.stringify(data).replace(/</g, '\\u003c');
 const html = readFileSync(join(here, 'template.html'), 'utf8')
@@ -117,6 +163,9 @@ const SECRET = new RegExp([
 const hits = [];
 for (const f of files) for (const h of f.hunks) for (const [t, , n, s] of h.lines) {
   if (t === '+' && SECRET.test(s)) hits.push(`${f.path}:${n}: ${s.trim().slice(0, 160)}`);
+}
+for (const f of data.context) for (const [, , n, s] of f.hunks[0].lines) {
+  if (SECRET.test(s)) hits.push(`${f.path}:${n} (변경 없음): ${s.trim().slice(0, 160)}`);
 }
 // 참조 목록에 실리는, 변경 없는 파일의 줄도 본다.
 for (const [p, lines] of Object.entries(data.refs?.snippets ?? {})) for (const [n, s] of Object.entries(lines)) {

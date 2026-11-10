@@ -10,7 +10,9 @@
   --add-bg: #e4f4e7; --add-num: #cfe9d5; --add-ink: #1f6b35;
   --del-bg: #fbe8e8; --del-num: #f3d2d2; --del-ink: #9b2c2c;
   --hunk: #eaedf8; --flash: #ffe9a8; --cmt-bg: #fffaf0; --mark: #ffe58a; --mark-cur: #ffb347;
-  --kw: #6f3fb3; --str: #1f6b35; --num: #a8540f; --com: #7a8099; --fn: #1d58b5; --type: #8a5a00;
+  --fn: #1d58b5;
+  --hl-ctl: #af00db; --hl-kw: #0000ff; --hl-type: #267f99; --hl-fn: #795e26; --hl-var: #001080; --hl-const: #0070c1;
+  --hl-str: #a31515; --hl-re: #811f3f; --hl-num: #098658; --hl-com: #008000;
   --ui: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -20,7 +22,9 @@
   --add-bg: #12271b; --add-num: #173322; --add-ink: #82d99c;
   --del-bg: #2c1519; --del-num: #3a1b20; --del-ink: #f19a9a;
   --hunk: #1b2038; --flash: #4a3e12; --cmt-bg: #1f1d18; --mark: #5c4a12; --mark-cur: #a86a10;
-  --kw: #c4a1ff; --str: #9ad8a8; --num: #f5b06b; --com: #6f7592; --fn: #8ab8ff; --type: #f2c35b;
+  --fn: #8ab8ff;
+  --hl-ctl: #c586c0; --hl-kw: #569cd6; --hl-type: #4ec9b0; --hl-fn: #dcdcaa; --hl-var: #9cdcfe; --hl-const: #4fc1ff;
+  --hl-str: #ce9178; --hl-re: #d16969; --hl-num: #b5cea8; --hl-com: #6a9955;
   color-scheme: dark;
 } }
 :root[data-theme="dark"] {
@@ -29,7 +33,9 @@
   --add-bg: #12271b; --add-num: #173322; --add-ink: #82d99c;
   --del-bg: #2c1519; --del-num: #3a1b20; --del-ink: #f19a9a;
   --hunk: #1b2038; --flash: #4a3e12; --cmt-bg: #1f1d18; --mark: #5c4a12; --mark-cur: #a86a10;
-  --kw: #c4a1ff; --str: #9ad8a8; --num: #f5b06b; --com: #6f7592; --fn: #8ab8ff; --type: #f2c35b;
+  --fn: #8ab8ff;
+  --hl-ctl: #c586c0; --hl-kw: #569cd6; --hl-type: #4ec9b0; --hl-fn: #dcdcaa; --hl-var: #9cdcfe; --hl-const: #4fc1ff;
+  --hl-str: #ce9178; --hl-re: #d16969; --hl-num: #b5cea8; --hl-com: #6a9955;
   color-scheme: dark;
 }
 body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 15px; line-height: 1.5; }
@@ -52,6 +58,12 @@ button { font: inherit; color: inherit; }
 .find .meta { min-width: 5ch; text-align: center; }
 mark { background: var(--mark); color: inherit; border-radius: 2px; }
 mark.cur { background: var(--mark-cur); box-shadow: 0 0 0 1px var(--accent); }
+.gfile { padding: 6px 12px; font-family: var(--mono); font-size: 12px; color: var(--muted); background: var(--bg); border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.gfile:first-child { border-top: 0; }
+.ghit { display: grid; grid-template-columns: 5ch minmax(0, 1fr); gap: 6px; padding: 4px 12px; font-family: var(--mono); font-size: 12px; color: var(--ink); text-decoration: none; border-top: 1px solid var(--line); }
+.ghit .gn { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.ghit .gc { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.ghit.del { background: var(--del-bg); }
 .bar-title { font-weight: 600; font-size: 16px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .bar-path { font-family: var(--mono); font-size: 13px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .meta { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -85,28 +97,52 @@ h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: v
 .row .p { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
 .row .p b { font-weight: 500; }
 .row .p span { color: var(--muted); }
-.row.done { background: var(--add-bg); }
+.frow { display: grid; grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--line); }
+.frow:first-child { border-top: 0; }
+.frow .row { border-top: 0; padding-left: 4px; }
+.frow.done { background: var(--add-bg); }
+.tick { display: grid; place-items: center; min-width: 42px; cursor: pointer; }
+.tick input { width: 18px; height: 18px; margin: 0; cursor: inherit; accent-color: var(--add-ink); }
+.tick:has(input:disabled) { cursor: default; }
+h2.with-tick { display: flex; align-items: center; min-height: 24px; }
+h2.with-tick .tick { min-height: 24px; }
+h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .row.done .p b { color: var(--add-ink); }
 .row .r { display: flex; gap: 8px; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; }
 .st { font-family: var(--mono); font-size: 11px; font-weight: 600; width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; }
 .st.A { background: var(--add-num); color: var(--add-ink); }
 .st.M { background: var(--hunk); color: var(--fn); }
 .st.D { background: var(--del-num); color: var(--del-ink); }
+.st.C { background: var(--hunk); color: var(--muted); }
 .plus { color: var(--add-ink); } .minus { color: var(--del-ink); }
 .chip { border-radius: 99px; padding: 1px 7px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.check { color: var(--add-ink); font-weight: 600; }
 .stale { color: var(--del-ink); font-weight: 600; }
 
 .cmt-list .row { grid-template-columns: minmax(0, 1fr) auto; }
 .cmt-list .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .cmt-list .where { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 
+/* 다크 테마의 코드 영역은 VS Code Dark+ 배경으로 */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .diff {
+  --ink: #d4d4d4; --muted: #858585; --line: #333333; --surface: #1e1e1e; --bg: #252526;
+  --add-bg: #2a3a1e; --add-num: #33471f; --add-ink: #b5d68a;
+  --del-bg: #4b1818; --del-num: #5a1d1d;
+  --hunk: #252526; --cmt-bg: #252526;
+  color: var(--ink);
+} }
+:root[data-theme="dark"] .diff {
+  --ink: #d4d4d4; --muted: #858585; --line: #333333; --surface: #1e1e1e; --bg: #252526;
+  --add-bg: #2a3a1e; --add-num: #33471f; --add-ink: #b5d68a;
+  --del-bg: #4b1818; --del-num: #5a1d1d;
+  --hunk: #252526; --cmt-bg: #252526;
+  color: var(--ink);
+}
 .diff { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
 .diff.nowrap { overflow-x: auto; }
 .hunk { background: var(--hunk); color: var(--muted); padding: 4px 10px; font-size: 12px; overflow-wrap: anywhere; border-top: 1px solid var(--line); }
 .hunk:first-child { border-top: 0; }
-.ln { display: grid; grid-template-columns: 3.6ch 3.6ch minmax(0, 1fr); cursor: pointer; scroll-margin-top: var(--bar-h, 120px); }
-.nowrap .ln { grid-template-columns: 3.6ch 3.6ch max-content; min-width: 100%; }
+.ln { display: grid; grid-template-columns: 3.6ch 3.6ch 1.6em minmax(0, 1fr); cursor: pointer; scroll-margin-top: var(--bar-h, 120px); }
+.nowrap .ln { grid-template-columns: 3.6ch 3.6ch 1.6em max-content; min-width: 100%; }
 .ln > .o, .ln > .n { color: var(--muted); text-align: right; padding-right: 4px; font-size: 11px; user-select: none; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .ln > .c { padding: 0 10px 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
 .nowrap .ln > .c { white-space: pre; overflow-wrap: normal; }
@@ -114,9 +150,15 @@ h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: v
 .ln.del { background: var(--del-bg); } .ln.del > .o, .ln.del > .n { background: var(--del-num); }
 .ln.add > .c::before { content: "+"; color: var(--add-ink); margin-left: -6px; display: inline-block; width: 6px; }
 .ln.del > .c::before { content: "−"; color: var(--del-ink); margin-left: -6px; display: inline-block; width: 6px; }
-.diff.nodel .ln { grid-template-columns: 3.6ch minmax(0, 1fr); }
-.diff.nodel.nowrap .ln { grid-template-columns: 3.6ch max-content; }
+.diff.nodel .ln { grid-template-columns: 3.6ch 1.6em minmax(0, 1fr); }
+.diff.nodel.nowrap .ln { grid-template-columns: 3.6ch 1.6em max-content; }
 .diff.nodel .ln > .o { display: none; }
+.diff [hidden] { display: none !important; }
+.ln > .fd { color: var(--muted); text-align: center; user-select: none; font-size: 11px; }
+.ln > .fd.can { cursor: pointer; }
+.ln > .fd.can::before { content: "▾"; }
+.ln.folded > .fd.can::before { content: "▸"; color: var(--accent); }
+.ln.folded > .c::after { content: "⋯"; color: var(--muted); background: var(--hunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
 .ln.delmark { box-shadow: inset 0 2px var(--del-ink); }
 .ln:hover > .c { box-shadow: inset 2px 0 var(--accent); }
 .ln.has-cmt > .n, .ln.has-cmt > .o { box-shadow: inset -3px 0 var(--accent); }
@@ -134,9 +176,9 @@ h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: v
 .cmt .orig code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 .cmt .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .cmt .acts .btn { min-height: 28px; padding: 2px 9px; font-size: 12.5px; }
-.composer textarea { width: 100%; box-sizing: border-box; min-height: 84px; resize: vertical; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.composer .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
-.composer .err { color: var(--del-ink); font-size: 13px; }
+.composer textarea, .cmt.editing textarea { width: 100%; box-sizing: border-box; min-height: 84px; resize: vertical; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.composer .acts, .cmt.editing .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.composer .err, .cmt.editing .err { color: var(--del-ink); font-size: 13px; }
 
 .fold { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--hunk); color: var(--muted); font-family: var(--ui); font-size: 12.5px; padding: 6px 12px; cursor: pointer; }
 .nowrap .fold { position: sticky; left: 0; width: calc(100vw - 34px); }
@@ -170,15 +212,18 @@ a.refs-row:hover, a.refs-row:focus-visible { background: var(--hunk); }
 .refs-row.here { background: var(--accent-soft); }
 .refs-row.off { color: var(--muted); }
 
-.hljs-keyword, .hljs-built_in, .hljs-literal, .hljs-meta { color: var(--kw); }
-.hljs-string, .hljs-regexp, .hljs-template-tag, .hljs-template-variable, .hljs-symbol { color: var(--str); }
-.hljs-number { color: var(--num); }
-.hljs-comment, .hljs-quote { color: var(--com); font-style: italic; }
-.hljs-title, .hljs-title.function_, .hljs-section { color: var(--fn); }
-.hljs-type, .hljs-title.class_, .hljs-class, .hljs-attr, .hljs-property, .hljs-params { color: var(--type); }
-.hljs-attr, .hljs-property { color: var(--fn); }
-.hljs-params { color: inherit; }
-.hljs-variable.language_, .hljs-subst { color: inherit; }
+/* VS Code Dark+/Light+ 처럼: 제어 키워드와 선언 키워드를 다른 색으로 */
+.hljs-keyword, .hljs-literal, .hljs-variable.language_, .hljs-meta { color: var(--hl-kw); }
+.hljs-keyword.ctl { color: var(--hl-ctl); }
+.hljs-built_in, .hljs-type, .hljs-title.class_, .hljs-class { color: var(--hl-type); }
+.hljs-title, .hljs-title.function_, .hljs-section { color: var(--hl-fn); }
+.hljs-property, .hljs-attr, .hljs-params, .hljs-variable { color: var(--hl-var); }
+.hljs-variable.constant_ { color: var(--hl-const); }
+.hljs-string, .hljs-template-tag, .hljs-template-variable, .hljs-symbol { color: var(--hl-str); }
+.hljs-regexp { color: var(--hl-re); }
+.hljs-number { color: var(--hl-num); }
+.hljs-comment, .hljs-quote { color: var(--hl-com); }
+.hljs-subst { color: inherit; }
 </style>
 
 <header class="bar" id="bar"></header>
@@ -191,13 +236,29 @@ const DATA = JSON.parse(document.getElementById('diff-data').textContent);
 const FILES = DATA.files;
 const BY_ID = new Map(FILES.map((f, i) => [f.id, i]));
 const BY_PATH = new Map(FILES.map((f) => [f.path, f]));
-const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', md: 'markdown', yml: 'yaml', yaml: 'yaml', sh: 'bash', css: 'css', html: 'xml' };
+// 변경은 없지만 정의가 있어 참조 시트에서 열 수 있는 파일(읽기 전용, 목록·확인 집계에는 넣지 않는다).
+const CONTEXT = DATA.context ?? [];
+const CTX_BY_ID = new Map(CONTEXT.map((f) => [f.id, f]));
+for (const f of CONTEXT) BY_PATH.set(f.path, f);
+const fileById = (id) => (BY_ID.has(id) ? FILES[BY_ID.get(id)] : CTX_BY_ID.get(id));
+const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', md: 'markdown', yml: 'yaml', yaml: 'yaml', sh: 'bash', css: 'css', html: 'xml', java: 'java', kt: 'kotlin', kts: 'kotlin', sql: 'sql', xml: 'xml', properties: 'ini', toml: 'ini', ini: 'ini', py: 'python', go: 'go', rs: 'rust', diff: 'diff' };
 
-const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0 };
-try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; } catch {}
+const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [] };
+const CHECKS_DOC = 'checks/all';
+try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; } catch {}
+const THEME_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
+const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
+const applyTheme = () => {
+  if (state.theme === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = state.theme;
+};
+applyTheme();
 const FOLD_CONTEXT = 4;
 state.search = { open: false, q: '', matches: [], idx: -1 };
 let searchTimer = 0;
+state.gq = '';
+let gsearchTimer = 0;
+const GSEARCH_LIMIT = 500;
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, attrs = {}, ...kids) => {
@@ -214,9 +275,11 @@ const el = (tag, attrs = {}, ...kids) => {
 };
 const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const ext = (p) => (p.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase();
+// hljs 는 키워드를 한 종류로만 표시해서, VS Code 처럼 흐름 제어 키워드만 따로 칠한다.
+const CONTROL_KEYWORD = /<span class="hljs-keyword">(if|else|return|export|import|from|for|while|do|switch|case|default|break|continue|throw|try|catch|finally|await|yield|as)<\/span>/g;
 const highlight = (s, lang) => {
   if (!lang || !window.hljs) return esc(s);
-  try { return hljs.highlight(s, { language: lang, ignoreIllegals: true }).value; } catch { return esc(s); }
+  try { return hljs.highlight(s, { language: lang, ignoreIllegals: true }).value.replace(CONTROL_KEYWORD, '<span class="hljs-keyword ctl">$1</span>'); } catch { return esc(s); }
 };
 const splitPath = (p) => { const i = p.lastIndexOf('/'); return i < 0 ? ['', p] : [p.slice(0, i + 1), p.slice(i + 1)]; };
 const lineKey = (side, line) => side + line;
@@ -225,7 +288,7 @@ const fmtTime = (iso) => { try { return new Date(iso).toLocaleString('ko-KR', { 
 
 function parseHash() {
   const m = location.hash.match(/^#(f[0-9a-f]{8})(?:-([no])(\d+))?$/);
-  if (!m || !BY_ID.has(m[1])) return { view: 'index' };
+  if (!m || (!BY_ID.has(m[1]) && !CTX_BY_ID.has(m[1]))) return { view: 'index' };
   return { view: 'file', fid: m[1], side: m[2], line: m[3] ? Number(m[3]) : null };
 }
 
@@ -243,18 +306,28 @@ function progressBar() {
 }
 
 function renderIndex() {
+  const typing = document.activeElement?.id === 'gfind-q';
   const add = FILES.reduce((s, f) => s + f.add, 0);
   const del = FILES.reduce((s, f) => s + f.del, 0);
   const bar = $('#bar');
   bar.replaceChildren(
     el('div', { class: 'bar-row' },
       el('div', { class: 'bar-title', text: '커밋 전 변경 리뷰' }),
-      el('span', { class: 'meta', text: `확인 ${state.reviewed.size}/${FILES.length}` })),
+      el('span', { class: 'meta', text: `확인 ${state.reviewed.size}/${FILES.length}` }),
+      themeButton()),
     progressBar(),
     el('div', { class: 'meta' },
       `${DATA.branch} · HEAD ${DATA.head} + 작업 트리 · `,
       el('span', { class: 'plus', text: `+${add}` }), ' ', el('span', { class: 'minus', text: `−${del}` }),
       ` · ${fmtTime(DATA.generatedAt)} 기준`),
+    el('div', { class: 'bar-row find' },
+      el('input', {
+        id: 'gfind-q', type: 'search', value: state.gq, placeholder: '모든 파일에서 찾기', 'aria-label': '모든 파일에서 찾기',
+        autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'search',
+        oninput: (e) => { clearTimeout(gsearchTimer); const q = e.target.value; gsearchTimer = setTimeout(() => runGlobalSearch(q), 200); },
+        onkeydown: (e) => { if (e.key === 'Escape') { e.target.value = ''; runGlobalSearch(''); } },
+      }),
+      el('span', { class: 'meta', id: 'gfind-count' })),
   );
 
   const main = $('#main');
@@ -268,15 +341,19 @@ function renderIndex() {
   } else {
     const list = el('div', { class: 'list cmt-list' });
     for (const c of [...open].sort((a, b) => (a.path + a.side + String(a.line).padStart(6, '0')).localeCompare(b.path + b.side + String(b.line).padStart(6, '0')))) {
-      list.append(el('a', { class: 'row', href: `#${c.fid}-${c.side}${c.line}` },
+      const onPage = BY_ID.has(c.fid) || CTX_BY_ID.has(c.fid);
+      list.append(el(onPage ? 'a' : 'div', { class: 'row', href: onPage ? `#${c.fid}-${c.side}${c.line}` : null },
         el('div', { style: 'min-width:0;display:flex;flex-direction:column;gap:2px' },
           el('div', { class: 'where', text: `${c.path}:${c.line}${c.side === 'o' ? ' (삭제된 줄)' : ''}` }),
           el('div', { class: 'body', text: c.body })),
-        el('span', { class: 'meta', text: '›' })));
+        el('span', { class: 'meta', text: onPage ? '›' : '변경 목록에 없음' })));
     }
     cmtSection.append(list);
   }
   main.append(cmtSection);
+  main.append(el('section', { class: 'group', id: 'gresults', hidden: true }));
+  const fileGroups = el('div', { id: 'filegroups' });
+  main.append(fileGroups);
 
   const groups = new Map();
   for (const f of FILES) {
@@ -286,43 +363,102 @@ function renderIndex() {
   }
   for (const [name, files] of groups) {
     const list = el('div', { class: 'list' });
+    const canWrite = state.db && !state.readOnly && !state.bulk;
+    const doneCount = files.filter((f) => state.reviewed.has(f.id)).length;
+    const groupBox = el('input', { type: 'checkbox', 'aria-label': `${name} 전체 확인`, checked: doneCount === files.length, disabled: !canWrite, onchange: () => toggleGroup(name, files) });
+    groupBox.indeterminate = doneCount > 0 && doneCount < files.length;
     for (const f of files) {
       const [dir, base] = splitPath(f.path);
       const n = openComments(f.id).length;
       const done = state.reviewed.has(f.id);
       const stale = state.stale.has(f.id);
-      list.append(el('a', { class: `row${done ? ' done' : ''}`, href: `#${f.id}` },
+      const box = el('input', { type: 'checkbox', 'aria-label': `${f.path} 확인`, checked: done, disabled: !canWrite, onchange: () => toggleReviewed(f) });
+      list.append(el('div', { class: `frow${done ? ' done' : ''}` }, el('label', { class: 'tick' }, box), el('a', { class: `row${done ? ' done' : ''}`, href: `#${f.id}` },
         el('span', { class: `st ${f.status}`, text: f.status, title: { A: '새 파일', M: '수정', D: '삭제' }[f.status] }),
         el('span', { class: 'p' }, el('span', { text: dir }), el('b', { text: base })),
         el('span', { class: 'r' },
           n ? el('span', { class: 'chip', text: `💬${n}` }) : null,
           el('span', { class: 'plus', text: `+${f.add}` }),
           el('span', { class: 'minus', text: `−${f.del}` }),
-          done ? el('span', { class: 'check', text: '✓', title: '확인함' }) : null,
-          stale ? el('span', { class: 'stale', text: '바뀜', title: '확인한 뒤 다시 바뀌었습니다' }) : null)));
+          stale ? el('span', { class: 'stale', text: '바뀜', title: '확인한 뒤 다시 바뀌었습니다' }) : null))));
     }
-    main.append(el('section', { class: 'group' }, el('h2', { text: `${name} ${files.length}` }), list));
+    fileGroups.append(el('section', { class: 'group' }, el('h2', { class: 'with-tick' }, el('label', { class: 'tick' }, groupBox), `${name} ${files.length}`,
+      state.undo?.name === name ? el('button', { class: 'btn undo', type: 'button', disabled: !canWrite, onclick: undoGroup, text: `되돌리기 ${state.undo.files.length}개` }) : null), list));
   }
+  if (state.gq) runGlobalSearch(state.gq);
+  if (typing) $('#gfind-q')?.focus();
+}
+
+function runGlobalSearch(q) {
+  state.gq = q;
+  const box = $('#gresults');
+  const groupsNode = $('#filegroups');
+  const count = $('#gfind-count');
+  if (!box) return;
+  box.replaceChildren();
+  if (!q) {
+    box.hidden = true;
+    if (groupsNode) groupsNode.hidden = false;
+    if (count) count.textContent = '';
+    return;
+  }
+  const needle = q.toLowerCase();
+  const list = el('div', { class: 'list' });
+  let total = 0;
+  let fileCount = 0;
+  for (const f of FILES) {
+    const hits = [];
+    const hideDel = hidesDel(f);
+    for (const h of f.hunks) {
+      for (const [t, o, n, s] of h.lines) {
+        if (hideDel && t === '-') continue;
+        if (s.toLowerCase().includes(needle)) hits.push([t, o, n, s]);
+      }
+    }
+    if (!hits.length) continue;
+    fileCount++;
+    total += hits.length;
+    if (list.childElementCount >= GSEARCH_LIMIT) continue;
+    list.append(el('div', { class: 'gfile', text: `${f.path} · ${hits.length}` }));
+    for (const [t, o, n, s] of hits.slice(0, GSEARCH_LIMIT)) {
+      const side = t === '-' ? 'o' : 'n';
+      const line = t === '-' ? o : n;
+      const text = s.trimStart();
+      const at = text.toLowerCase().indexOf(needle);
+      const code = el('span', { class: 'gc', text });
+      markText(code, [[{ start: at, end: at + needle.length }, 0]]);
+      list.append(el('a', {
+        class: `ghit${t === '-' ? ' del' : ''}`, href: `#${f.id}-${side}${line}`,
+        onclick: () => { state.search = { open: true, q, matches: [], idx: -1 }; },
+      }, el('span', { class: 'gn', text: `${t === '-' ? '−' : ''}${line}` }), code));
+    }
+  }
+  if (count) count.textContent = total ? `${total}줄 · ${fileCount}파일` : '없음';
+  box.append(el('h2', { text: `"${q}" 검색 결과` }), total ? list : el('div', { class: 'empty', text: '일치하는 줄이 없습니다.' }));
+  box.hidden = false;
+  if (groupsNode) groupsNode.hidden = true;
 }
 
 function renderFile(route) {
   const idx = BY_ID.get(route.fid);
-  const f = FILES[idx];
-  const prev = FILES[idx - 1];
-  const next = FILES[idx + 1];
+  const f = fileById(route.fid);
+  const prev = f.ctx ? null : FILES[idx - 1];
+  const next = f.ctx ? null : FILES[idx + 1];
   const done = state.reviewed.has(f.id);
 
   const bar = $('#bar');
   bar.replaceChildren(
     el('div', { class: 'bar-row tools' },
       el('a', { class: 'btn', href: '#', 'aria-label': '파일 목록' }, '‹ 목록'),
-      el('span', { class: 'meta', text: `${idx + 1}/${FILES.length}` }),
+      f.ctx ? el('button', { class: 'btn', type: 'button', onclick: goBack }, '‹ 뒤로') : null,
+      el('span', { class: 'meta', text: f.ctx ? '변경 없음' : `${idx + 1}/${FILES.length}` }),
       el('span', { style: 'flex:1' }),
       el('button', { class: `btn${state.search.open ? ' on' : ''}`, id: 'find-btn', type: 'button', onclick: openSearch }, '찾기'),
       el('button', { class: `btn${state.full ? ' on' : ''}`, type: 'button', onclick: toggleFull, title: '끄면 바뀐 곳 주변만 보입니다' }, '전체'),
       el('button', { class: `btn${state.wrap ? ' on' : ''}`, type: 'button', onclick: toggleWrap }, '줄바꿈'),
-      f.status === 'D' ? null : el('button', { class: `btn${state.del ? ' on' : ''}`, type: 'button', onclick: toggleDel, title: '끄면 지운 줄 자리에 빨간 선만 남습니다' }, '지운 줄'),
-      el('button', { class: `btn${done ? ' on' : ''}`, id: 'rv-btn', type: 'button', onclick: () => toggleReviewed(f), disabled: !state.db || state.readOnly }, done ? '✓ 확인함' : '확인'),
+      f.status === 'D' || f.ctx ? null : el('button', { class: `btn${state.del ? ' on' : ''}`, type: 'button', onclick: toggleDel, title: '끄면 지운 줄 자리에 빨간 선만 남습니다' }, '지운 줄'),
+      themeButton(),
+      f.ctx ? null : el('button', { class: `btn${done ? ' on' : ''}`, id: 'rv-btn', type: 'button', onclick: () => toggleReviewed(f), disabled: !state.db || state.readOnly }, done ? '✓ 확인함' : '확인'),
     ),
     el('div', { class: 'bar-row' },
       el('span', { class: `st ${f.status}`, text: f.status }),
@@ -358,7 +494,8 @@ function renderFile(route) {
   const lang = LANG[ext(f.path)];
   const keep = new Set(state.comments.filter((c) => c.fid === f.id).map((c) => lineKey(c.side, c.line)));
   if (route.line) keep.add(lineKey(route.side, route.line));
-  const makeRow = (lines, i) => {
+  state.ranges = f.hunks.map((h) => foldRanges(h.lines));
+  const makeRow = (lines, i, hi) => {
     const [t, o, n, s] = lines[i];
     const side = t === '-' ? 'o' : 'n';
     const line = t === '-' ? o : n;
@@ -371,10 +508,17 @@ function renderFile(route) {
       id: `${f.id}-${side}${line}`,
       'data-key': lineKey(side, line),
       'data-code': s,
+      'data-h': hi,
+      'data-i': i,
+      'data-end': state.ranges[hi].get(i),
       tabindex: 0,
     },
       el('span', { class: 'o', text: o || '' }),
       el('span', { class: 'n', text: n || '' }));
+    const end = state.ranges[hi].get(i);
+    const fd = el('span', { class: `fd${end === undefined ? '' : ' can'}`, 'aria-label': end === undefined ? null : '접기/펴기' });
+    if (end !== undefined) fd.addEventListener('click', (e) => { e.stopPropagation(); toggleFold(f, hi, i); });
+    row.append(fd);
     const code = el('span', { class: 'c' });
     code.innerHTML = highlight(s, lang) || ' ';
     row.append(code);
@@ -392,7 +536,7 @@ function renderFile(route) {
     for (let i = 0; i < lines.length;) {
       if (visible[i]) {
         const [t, o] = lines[i];
-        if (!hideDel || t !== '-' || keep.has(lineKey('o', o))) diff.append(makeRow(lines, i));
+        if (!hideDel || t !== '-' || keep.has(lineKey('o', o))) diff.append(makeRow(lines, i, hi));
         i++;
         continue;
       }
@@ -402,7 +546,8 @@ function renderFile(route) {
       const to = j;
       const fold = el('button', { class: 'fold', type: 'button', 'data-h': hi, 'data-from': from, 'data-to': to }, `⋯ 바뀌지 않은 ${to - from}줄 펼치기`);
       fold.addEventListener('click', () => {
-        fold.replaceWith(...lines.slice(from, to).map((ln, k) => makeRow(lines, from + k)));
+        fold.replaceWith(...lines.slice(from, to).map((ln, k) => makeRow(lines, from + k, hi)));
+        applyFolds();
         if (state.search.q) applyMarks();
         updateJump();
       });
@@ -419,7 +564,7 @@ function renderFile(route) {
   state.search.matches = findMatches(f, state.search.q);
   state.search.idx = -1;
   applyMarks();
-  main.append(el('div', { class: 'pager' },
+  if (!f.ctx) main.append(el('div', { class: 'pager' },
     el('a', { class: 'btn', href: prev ? `#${prev.id}` : '#', 'aria-disabled': prev ? null : 'true' }, prev ? `‹ ${splitPath(prev.path)[1]}` : '처음'),
     el('a', { class: 'btn', href: next ? `#${next.id}` : '#', 'aria-disabled': next ? null : 'true' }, next ? `${splitPath(next.path)[1]} ›` : '마지막')));
 
@@ -429,6 +574,7 @@ function renderFile(route) {
   if (route.line) {
     const target = document.getElementById(`${f.id}-${route.side}${route.line}`);
     if (target) {
+      revealRow(target);
       requestAnimationFrame(() => { target.scrollIntoView({ block: 'center' }); target.classList.add('flash'); });
     }
   } else if (!state.full) {
@@ -446,7 +592,7 @@ function setBarHeight() {
 }
 function currentFile() {
   const route = parseHash();
-  return route.view === 'file' ? FILES[BY_ID.get(route.fid)] : null;
+  return route.view === 'file' ? fileById(route.fid) : null;
 }
 
 function findMatches(f, q) {
@@ -538,6 +684,7 @@ function goMatch(dir) {
       .find((fold) => Number(fold.dataset.from) <= m.li && m.li < Number(fold.dataset.to))
       ?.click();
   }
+  revealRow(document.getElementById(`${f.id}-${m.key}`));
   setCurrentMatch();
   document.getElementById(`${f.id}-${m.key}`)?.scrollIntoView({ block: 'center' });
 }
@@ -577,8 +724,67 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+function foldRanges(lines) {
+  const ranges = new Map();
+  const stack = [];
+  let prev = -1;
+  const close = (d) => {
+    while (stack.length && stack[stack.length - 1].d >= d) {
+      const top = stack.pop();
+      if (prev > top.i) ranges.set(top.i, prev);
+    }
+  };
+  lines.forEach(([, , , s], i) => {
+    if (!s.trim()) return;
+    const d = s.match(/^[ \t]*/)[0].replace(/\t/g, '  ').length;
+    close(d);
+    stack.push({ i, d });
+    prev = i;
+  });
+  close(-1);
+  return ranges;
+}
+function applyFolds() {
+  const diff = $('#diff');
+  const f = currentFile();
+  if (!diff || !f) return;
+  let h = null;
+  let until = -1;
+  let hide = false;
+  for (const node of diff.children) {
+    const cls = node.classList;
+    if (cls.contains('hunk')) { h = null; until = -1; hide = false; continue; }
+    if (cls.contains('ln') || cls.contains('fold')) {
+      if (node.dataset.h !== h) { h = node.dataset.h; until = -1; }
+      const i = Number(cls.contains('ln') ? node.dataset.i : node.dataset.from);
+      hide = i <= until;
+      if (cls.contains('ln')) {
+        const shut = !hide && node.dataset.end !== undefined && state.collapsed.has(`${f.id}:${h}:${i}`);
+        cls.toggle('folded', shut);
+        if (shut) until = Math.max(until, Number(node.dataset.end));
+      }
+    }
+    node.hidden = hide;
+  }
+}
+function toggleFold(f, hi, i) {
+  const k = `${f.id}:${hi}:${i}`;
+  if (state.collapsed.has(k)) state.collapsed.delete(k); else state.collapsed.add(k);
+  applyFolds();
+  updateJump();
+}
+function revealRow(row) {
+  const f = currentFile();
+  if (!row?.hidden || !f) return;
+  const hi = Number(row.dataset.h);
+  const i = Number(row.dataset.i);
+  for (const [start, end] of state.ranges[hi] || []) {
+    if (start < i && i <= end) state.collapsed.delete(`${f.id}:${hi}:${start}`);
+  }
+  applyFolds();
+}
 function visibleLines(lines, keep) {
-  if (state.full) return lines.map(() => true);
+  if (state.full || lines.every(([t]) => t === ' ')) return lines.map(() => true);
   const near = new Array(lines.length).fill(Infinity);
   let last = -Infinity;
   for (let i = 0; i < lines.length; i++) {
@@ -595,7 +801,7 @@ function visibleLines(lines, keep) {
 
 const changeTop = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-h')) || 120;
 function jumpChange(dir) {
-  const marks = [...document.querySelectorAll('#diff .ln.chg')];
+  const marks = [...document.querySelectorAll('#diff .ln.chg:not([hidden])')];
   const top = changeTop();
   const target = dir > 0
     ? marks.find((m) => m.getBoundingClientRect().top > top + 4)
@@ -605,7 +811,7 @@ function jumpChange(dir) {
 function updateJump() {
   const count = $('#jump-count');
   if (!count) return;
-  const marks = [...document.querySelectorAll('#diff .ln.chg')];
+  const marks = [...document.querySelectorAll('#diff .ln.chg:not([hidden])')];
   const top = changeTop();
   let current = 0;
   marks.forEach((m, i) => { if (m.getBoundingClientRect().top <= top + 4) current = i + 1; });
@@ -638,12 +844,19 @@ function paintThreads(f) {
     anchor.after(threadEl(list, null, row.dataset.code));
   }
   if (lost.length) diff.prepend(threadEl(lost, '이 diff 에서 줄을 찾지 못한 코멘트'));
+  applyFolds();
 }
 
 function threadEl(list, title, current) {
   const box = el('div', { class: 'thread' });
   if (title) box.append(el('div', { class: 'meta', text: title }));
   for (const c of [...list].sort((a, b) => a.at.localeCompare(b.at))) {
+    box.append(state.editing?.id === c.id ? cmtEditor(c) : cmtView(c));
+  }
+  return box;
+  function lost(c) { return title ? `${c.side === 'o' ? '삭제 줄 ' : ''}${c.line}행 · ` : ''; }
+  function cmtView(c) {
+    const canWrite = !state.readOnly && state.db;
     const del = el('button', { class: 'btn', type: 'button' }, '삭제');
     del.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -651,18 +864,47 @@ function threadEl(list, title, current) {
       del.dataset.arm = '1'; del.textContent = '한 번 더 눌러 삭제'; del.classList.add('on');
       setTimeout(() => { delete del.dataset.arm; del.textContent = '삭제'; del.classList.remove('on'); }, 3000);
     });
-    box.append(el('div', { class: `cmt${c.done ? ' done' : ''}` },
+    const node = el('div', { class: `cmt${c.done ? ' done' : ''}` },
       el('div', { class: 'body', text: c.body }),
       typeof c.code === 'string' && (title || c.code !== current)
         ? el('div', { class: 'orig' }, el('span', { class: 'meta', text: title ? '줄 내용' : '원래 줄(그 뒤 바뀜)' }), el('code', { text: c.code || ' ' }))
         : null,
       el('div', { class: 'acts' },
-        el('span', { class: 'meta', text: `${lost(c)}${fmtTime(c.at)}${c.done ? ' · 해결됨' : ''}` }),
-        state.readOnly || !state.db ? null : el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); toggleDone(c); } }, c.done ? '다시 열기' : '해결'),
-        state.readOnly || !state.db ? null : del)));
+        el('span', { class: 'meta', text: `${lost(c)}${fmtTime(c.at)}${c.editedAt ? ' · 수정됨' : ''}${c.done ? ' · 해결됨' : ''}` }),
+        canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: c.body }; node.replaceWith(cmtEditor(c)); } }, '수정') : null,
+        canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); toggleDone(c); } }, c.done ? '다시 열기' : '해결') : null,
+        canWrite ? del : null));
+    return node;
   }
-  return box;
-  function lost(c) { return title ? `${c.side === 'o' ? '삭제 줄 ' : ''}${c.line}행 · ` : ''; }
+  // 고치는 중에 다른 코멘트 변경으로 스레드를 다시 그려도 쓰던 글이 남도록 state.editing 에 둔다.
+  function cmtEditor(c) {
+    const ta = el('textarea', { 'aria-label': '코멘트 수정' });
+    ta.value = state.editing.draft;
+    ta.addEventListener('input', () => { if (state.editing?.id === c.id) state.editing.draft = ta.value; });
+    const err = el('div', { class: 'err', hidden: true });
+    const save = el('button', { class: 'btn primary', type: 'button' }, '저장');
+    const cancel = el('button', { class: 'btn', type: 'button' }, '취소');
+    const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ta, err, el('div', { class: 'acts' }, cancel, save));
+    const close = (next) => { state.editing = null; node.replaceWith(cmtView(next)); };
+    cancel.addEventListener('click', () => close(c));
+    save.addEventListener('click', async () => {
+      const body = ta.value.trim();
+      if (!body) { ta.focus(); return; }
+      if (body === c.body) { close(c); return; }
+      save.disabled = true; save.textContent = '저장 중';
+      const editedAt = new Date().toISOString();
+      try {
+        await state.db.collection('comments').doc(c.id).update({ body, editedAt });
+        close({ ...c, body, editedAt });
+      } catch (e) {
+        err.hidden = false;
+        err.textContent = `저장하지 못했습니다(${e?.code || '오류'}). 다시 눌러 주세요.`;
+        save.disabled = false; save.textContent = '저장';
+      }
+    });
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
+    return node;
+  }
 }
 
 function openComposer(f, side, line, code, row) {
@@ -750,7 +992,7 @@ function openRefs(f, line, name, row) {
     for (const [gp, lines] of groups) {
       const path = REFS.paths[gp];
       const target = BY_PATH.get(path);
-      list.append(el('div', { class: 'refs-file', text: target ? path : `${path} (변경 없음)` }));
+      list.append(el('div', { class: 'refs-file', text: target && !target.ctx ? path : `${path} (변경 없음)` }));
       for (const l of lines) {
         const text = (target ? newLineText(target, l) : REFS.snippets[gp]?.[l] ?? '').trim();
         const kids = [el('span', { class: 'n', text: l }), el('code', { text })];
@@ -783,16 +1025,43 @@ async function removeComment(c) {
 async function toggleDone(c) {
   try { await state.db.collection('comments').doc(c.id).update({ done: !c.done }); } catch (e) { flashNote(`상태를 바꾸지 못했습니다(${e?.code || '오류'}).`); }
 }
-async function toggleReviewed(f) {
-  const ref = state.db.collection('reviewed').doc(f.id);
+// db 에 일괄 쓰기가 없어 파일마다 문서를 두면 섹션 일괄 처리가 한 건씩 느리게 저장된다.
+// 그래서 확인 표시는 문서 하나(checks/all)의 files 맵에 두고, update 가 중첩 객체를 병합하는 것으로 한 번에 쓴다.
+async function setReviewed(files, done) {
+  const at = new Date().toISOString();
+  const patch = Object.fromEntries(files.map((f) => [f.id, done ? { path: f.path, hash: f.hash, at } : null]));
+  const ref = state.db.doc(CHECKS_DOC);
   try {
-    if (state.reviewed.has(f.id)) await ref.delete();
-    else await ref.set({ path: f.path, hash: f.hash, at: new Date().toISOString() });
+    if (state.checksExist) await ref.update({ files: patch });
+    else await ref.set({ files: patch });
   } catch (e) {
     if (e?.code === 'invalid_argument') { state.readOnly = true; state.dbNote = '이 화면에서는 기록할 권한이 없어 읽기만 됩니다.'; }
     else state.dbNote = `확인 표시를 저장하지 못했습니다(${e?.code || '오류'}).`;
     render();
   }
+}
+// 되돌리기는 마지막 일괄 처리 하나만 기억한다. 그 뒤 파일 하나를 직접 바꾸면 그 선택을 덮어쓰지 않도록 버린다.
+function toggleReviewed(f) {
+  state.undo = null;
+  return setReviewed([f], !state.reviewed.has(f.id));
+}
+async function writeBulk(files, done) {
+  state.bulk = true;
+  rerenderKeepingPlace();
+  await setReviewed(files, done);
+  state.bulk = false;
+  rerenderKeepingPlace();
+}
+function toggleGroup(name, files) {
+  const unchecked = files.filter((f) => !state.reviewed.has(f.id));
+  const changed = unchecked.length ? unchecked : files;
+  state.undo = { name, files: changed, done: !unchecked.length };
+  return writeBulk(changed, unchecked.length > 0);
+}
+function undoGroup() {
+  const { files, done } = state.undo;
+  state.undo = null;
+  return writeBulk(files, done);
 }
 function toggleWrap() {
   state.wrap = !state.wrap;
@@ -805,6 +1074,13 @@ function toggleDel() {
   try { localStorage.setItem('del', state.del ? '1' : '0'); } catch {}
   rerenderAtSameLine();
 }
+function themeButton() { return el('button', { class: 'btn', type: 'button', onclick: cycleTheme, title: '자동은 기기 설정을 따릅니다' }, `테마: ${THEME_LABEL[state.theme] || THEME_LABEL.auto}`); }
+function cycleTheme(e) {
+  state.theme = THEME_NEXT[state.theme] || 'light';
+  try { localStorage.setItem('theme', state.theme); } catch {}
+  applyTheme();
+  e.currentTarget.textContent = `테마: ${THEME_LABEL[state.theme]}`;
+}
 function toggleFull() {
   state.full = !state.full;
   try { localStorage.setItem('mode', state.full ? 'full' : 'changes'); } catch {}
@@ -812,7 +1088,7 @@ function toggleFull() {
 }
 function rerenderAtSameLine() {
   const top = changeTop();
-  const rows = [...document.querySelectorAll('#diff .ln')];
+  const rows = [...document.querySelectorAll('#diff .ln:not([hidden])')];
   const anchor = rows.find((r) => r.getBoundingClientRect().top >= top - 2);
   const offset = anchor ? anchor.getBoundingClientRect().top : 0;
   const route = parseHash();
@@ -832,12 +1108,11 @@ function rerenderAtSameLine() {
 function rerenderKeepingPlace() {
   const route = parseHash();
   if (route.view === 'file') {
-    const f = FILES[BY_ID.get(route.fid)];
+    const f = fileById(route.fid);
     paintThreads(f);
     const btn = $('#rv-btn');
     const done = state.reviewed.has(f.id);
-    btn.classList.toggle('on', done); btn.textContent = done ? '✓ 확인함' : '확인';
-    btn.disabled = !state.db || state.readOnly;
+    if (btn) { btn.classList.toggle('on', done); btn.textContent = done ? '✓ 확인함' : '확인'; btn.disabled = !state.db || state.readOnly; }
     $('#bar .progress').replaceWith(progressBar());
   } else {
     const y = window.scrollY;
@@ -848,6 +1123,21 @@ function rerenderKeepingPlace() {
 
 // 파일을 그린 뒤의 스크롤은 목록 위치가 아니므로 목록을 보는 동안만 기록한다.
 window.addEventListener('scroll', () => { if (state.onIndex) state.indexY = window.scrollY; }, { passive: true });
+// 페이지가 프레임 안에서 열려 history.back() 이 듣지 않으므로, 해시 이동 기록을 직접 쌓아 "뒤로"에 쓴다.
+const navStack = [];
+let lastHash = location.hash;
+let goingBack = false;
+window.addEventListener('hashchange', () => {
+  if (!goingBack) navStack.push(lastHash);
+  goingBack = false;
+  lastHash = location.hash;
+});
+function goBack() {
+  const prev = navStack.pop() ?? '';
+  if ((prev || '#') === (location.hash || '#')) { render(); return; }
+  goingBack = true;
+  location.hash = prev || '#';
+}
 window.addEventListener('hashchange', render);
 render();
 
@@ -870,11 +1160,12 @@ render();
     settle(snap);
     rerenderKeepingPlace();
   }, fail);
-  db.collection('reviewed').onSnapshot((snap) => {
-    const hashes = new Map(FILES.map((f) => [f.id, f.hash]));
-    const docs = snap.docs.filter((d) => hashes.has(d.id));
-    state.reviewed = new Set(docs.filter((d) => d.data().hash === hashes.get(d.id)).map((d) => d.id));
-    state.stale = new Set(docs.filter((d) => !state.reviewed.has(d.id)).map((d) => d.id));
+  db.doc(CHECKS_DOC).onSnapshot((snap) => {
+    state.checksExist = snap.exists;
+    const checks = (snap.exists && snap.data().files) || {};
+    const marked = FILES.filter((f) => checks[f.id]);
+    state.reviewed = new Set(marked.filter((f) => checks[f.id].hash === f.hash).map((f) => f.id));
+    state.stale = new Set(marked.filter((f) => !state.reviewed.has(f.id)).map((f) => f.id));
     settle(snap);
     rerenderKeepingPlace();
   }, fail);

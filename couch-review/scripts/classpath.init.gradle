@@ -1,0 +1,14 @@
+// refs-java.mjs 가 javac 분석용 클래스패스를 얻으려고 부른다. 빌드 결과물은 만들지 않는다.
+allprojects {
+  plugins.withId('java') {
+    def cp = project.provider { (project.sourceSets.main.compileClasspath + project.sourceSets.test.compileClasspath).files.findAll { it.exists() }.join(File.pathSeparator) }
+    def ap = project.provider { (project.configurations.findByName('annotationProcessor')?.files ?: []).join(File.pathSeparator) }
+    tasks.register('couchReviewClasspath') {
+      notCompatibleWithConfigurationCache('prints resolved classpath')
+      doLast {
+        println 'COUCH_CP=' + cp.get()
+        println 'COUCH_AP=' + ap.get()
+      }
+    }
+  }
+}

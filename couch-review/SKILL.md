@@ -17,6 +17,7 @@ trigger: /couch-review
 | `latest-snap.txt`, `snaps/<시각>/` | 마지막으로 올린 파일 내용. 코멘트 줄 번호를 옮기는 기준 |
 | `files.json` | 경로 → 페이지 파일 id |
 | `updates.json` | remap 이 만든 코멘트 줄 이동 writes |
+| `comment-paths.json` | remap 이 남긴 열린 코멘트 경로. 변경 목록에서 빠진 파일은 build 가 "변경 없음" 읽기 전용(context)으로 실어 코멘트 링크가 열린다 |
 
 삭제 명령을 쓰지 않는다. 오래된 `snaps/` 정리가 필요하면 삭제 명령을 사용자에게 준다.
 
@@ -54,14 +55,18 @@ trigger: /couch-review
 ## 페이지 구조(고칠 때 참고)
 
 - `scripts/template.html`: 색 토큰은 `:root` 에 있고 다크 모드를 지원한다. `__REPO__`, `/*__DATA__*/` 는 빌드가 채운다.
-- db: `comments/<자동 id>` `{fid, path, side, line, code, body, at, done}`, `reviewed/<fid>` `{path, hash, at}`.
-- 확인 표시: build.mjs 가 파일마다 diff 내용의 `hash` 를 싣고, 페이지는 `reviewed` 문서의 `hash` 가 지금 값과 같을 때만 확인으로 본다. Claude 가 고친 파일은 다시 올리면 저절로 확인이 풀리고 목록에 "바뀜"이 붙는다. 따로 지울 필요가 없다.
+- db: `comments/<자동 id>` `{fid, path, side, line, code, body, at, done, editedAt?}`(페이지에서 본문을 고치면 `editedAt` 이 붙는다), `checks/all` `{files: {<fid>: {path, hash, at} | null}}`. 확인 표시는 문서 하나에 두어 일괄 처리도 한 번에 쓴다(`update` 가 중첩 객체를 병합한다). 옛 `reviewed/<fid>` 문서는 더 읽지 않는다.
+- 확인 표시: build.mjs 가 파일마다 diff 내용의 `hash` 를 싣고, 페이지는 `checks/all` 의 `files[fid].hash` 가 지금 값과 같을 때만 확인으로 본다. Claude 가 고친 파일은 다시 올리면 저절로 확인이 풀리고 목록에 "바뀜"이 붙는다. 따로 지울 필요가 없다.
+- 목록의 파일 행 앞 체크박스로 파일을 열지 않고 확인하고, 섹션 제목의 체크박스로 그 섹션을 일괄 처리한다(하나라도 안 됐으면 전부 확인, 전부 됐으면 전부 해제, 일부만 됐으면 가운데 표시). 섹션 전체를 `update` 한 번으로 쓴다. 일괄 처리한 섹션 제목에 "되돌리기" 버튼이 떠서 바뀐 파일만 원래대로 돌린다. 마지막 일괄 처리 하나만 기억하고(`state.undo`), 파일 하나를 직접 바꾸거나 새로고침하면 사라진다.
 - 범위는 `git diff`(HEAD 대비 작업 트리) + `git ls-files --others --exclude-standard`. 브랜치 전체나 다른 기준이 필요하면 build.mjs 의 diff 명령을 바꾼다.
 - diff 는 파일 전체를 싣는다(`--unified=1000000`). 페이지의 "전체" 버튼(기본 켬)을 끄면 바뀐 곳 앞뒤 `FOLD_CONTEXT`(4)줄만 남기고 나머지는 "N줄 펼치기"로 접는다. 링크로 연 줄과 코멘트가 달린 줄은 접지 않는다.
 - 전체 보기로 파일을 열면 첫 변경으로 스크롤한다. 오른쪽 아래 ↑↓ 버튼은 변경 묶음의 첫 줄(`.ln.chg`) 사이를 오가고 현재/전체 개수를 보여 준다.
 - "찾기"(또는 Cmd/Ctrl+F)는 지금 파일 전체에서 대소문자 없이 찾는다. 결과는 `<mark>` 로 칠하고 ↑↓·Enter·Shift+Enter 로 오가며, 접힌 구간의 결과로 가면 그 구간을 펼친다. 검색어는 다른 파일로 넘어가도 유지된다.
-- 참조: `scripts/refs.mjs` 가 저장소의 `tsconfig.json` 과 `node_modules/typescript` 로 프로그램을 한 번 만들고, 모든 파일의 이름을 checker 심볼로 묶어 정의·사용 위치를 `DATA.refs` 에 싣는다(이 저장소 약 2초, 0.9MB). 이름마다 `findReferences` 를 부르면 1분 가까이 걸리고, 글자 일치는 잡음이 많아 쓰지 않는다. 라이브러리에만 정의된 이름은 빼고, 객체 리터럴 키는 맞춰야 하는 타입의 속성으로 묶는다. typescript·tsconfig 가 없으면 `refs: none` 으로 건너뛴다.
+- 참조: `scripts/refs.mjs` 가 저장소의 `tsconfig.json` 과 `node_modules/typescript` 로 프로그램을 한 번 만들고, 모든 파일의 이름을 checker 심볼로 묶어 정의·사용 위치를 `DATA.refs` 에 싣는다(이 저장소 약 2초, 0.9MB). 이름마다 `findReferences` 를 부르면 1분 가까이 걸리고, 글자 일치는 잡음이 많아 쓰지 않는다. 라이브러리에만 정의된 이름은 빼고, 객체 리터럴 키는 맞춰야 하는 타입의 속성으로 묶는다. typescript·tsconfig 가 없으면 `refs: none` 으로 건너뛴다. Java 는 `scripts/refs-java.mjs` 가 `RefsJava.java`(javac Trees API, Lombok 프로세서만 켬, 출력은 임시 폴더)로 실제 요소 단위로 묶는다 — 같은 이름이라도 다른 메서드·지역 변수는 따로다. 클래스패스는 `classpath.init.gradle` 로 `./gradlew --offline` 에서 받아 `java-classpath.json` 에 캐시(build/settings.gradle 해시가 키), jOOQ 등 `build/generated-sources` 는 타입 해석에만 쓴다. 약 7초. 실패하면 이름 기준 토큰 방식(같은 이름 메서드는 한 묶음)으로 대체하고 그 사실을 출력한다. Python 은 `scripts/refs-python.mjs` → `refs_python.py`(표준 ast, `python3 -I`)가 클래스·함수·모듈/클래스 변수·속성은 이름으로, 지역 변수·파라미터는 함수 안에서 묶는다. 세 결과는 build.mjs 의 `mergeRefs` 가 합친다.
+- 정의가 변경 없는 파일에 있으면 build.mjs 가 그 파일 전체를 `DATA.context`(status `C`, `ctx: true`)로 싣는다. 페이지는 이 파일을 읽기 전용으로 열고(확인 버튼·이전/다음·목록·확인 집계·전체 검색에서 빠짐, "‹ 목록" 과 함께 "‹ 뒤로"가 뜬다 — 프레임 안이라 history.back() 이 듣지 않으므로 페이지가 해시 이동 기록(`navStack`)을 쌓아 `goBack` 으로 되돌린다), 참조 시트의 그 줄도 링크가 된다. 비밀값 검사도 이 내용을 본다.
 - 페이지에서 코드의 이름을 누르면 아래 시트에 정의·사용 목록이 뜨고(지금 파일, 페이지에 있는 파일, 나머지 순), 페이지에 있는 파일 줄은 그 줄로 가는 링크다. 변경 없는 파일 줄은 `refs.snippets` 의 내용만 보여 준다. 이름이 아닌 곳이나 삭제된 줄을 누르면 전처럼 코멘트 창이 열리고, 시트의 "코멘트" 버튼으로도 연다. 빌드의 비밀값 검사는 이 snippets 도 본다.
+- 목록 화면의 "모든 파일에서 찾기"는 페이지에 실린 모든 파일 내용(전체 diff)에서 대소문자 없이 줄 단위로 찾아 파일별로 보여 준다(`runGlobalSearch`, 최대 `GSEARCH_LIMIT` 행). 결과를 누르면 그 줄로 가고 파일 안 찾기에 같은 검색어가 켜진다. 하이라이트 언어는 확장자 → `LANG` 표로 고르고, 표에 없는 확장자는 색 없이 보인다.
 - "지운 줄"(기본 켬)을 끄면 삭제된 줄을 숨기고 옛 줄 번호 칸도 없앤다. 지운 자리는 다음 줄 위의 빨간 선(`.delmark`)으로만 남고, 그 줄이 ↑↓ 변경 묶음이 된다. 코멘트가 달린 삭제 줄은 그대로 보이고, 찾기는 숨긴 줄을 건너뛴다. 삭제된 파일(D)에는 버튼이 없다.
 - 파일에서 목록으로 돌아오면 목록을 보던 스크롤 위치로 돌아간다(`state.indexY`, 새로고침하면 맨 위).
-- "전체", "줄바꿈", "지운 줄" 선택은 viewer 의 localStorage(`mode`, `wrap`, `del`)에 남는다.
+- "전체", "줄바꿈", "지운 줄", "테마"(자동→라이트→다크) 선택은 viewer 의 localStorage(`mode`, `wrap`, `del`, `theme`)에 남는다. 다크 테마의 코드 영역은 VS Code Dark+ 배경(`#1e1e1e`), 코드 색은 Dark+/Light+ 토큰(`--hl-*`)이다.
+- 접기: 줄 번호 옆 ▾ 를 누르면 들여쓰기가 더 깊은 다음 줄들(함수·블록 본문)을 접는다. 범위는 hunk 줄 전체에서 들여쓰기로 계산하고(`foldRanges`), 닫는 `}` 줄은 남긴다. 접힌 상태는 페이지를 연 동안만 기억하고, 검색 결과·링크 줄이 접힌 곳에 있으면 펼친다.

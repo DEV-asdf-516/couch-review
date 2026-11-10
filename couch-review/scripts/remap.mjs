@@ -48,12 +48,14 @@ function mapLine(hunks, line) {
 
 const writes = [];
 const log = [];
+const openPaths = new Set();
 for (const name of existsSync(commentsDir) ? readdirSync(commentsDir) : []) {
   if (!name.endsWith('.json')) continue;
   const raw = JSON.parse(readFileSync(join(commentsDir, name), 'utf8'));
   const doc = raw.data ?? raw;
   const version = raw.version ?? doc.version;
   const id = raw.id ?? raw.doc_id ?? name.replace(/\.json$/, '');
+  if (!doc.done && typeof doc.path === 'string') openPaths.add(doc.path);
   if (doc.side !== 'n' || typeof doc.line !== 'number') continue;
   const hunks = hunksOf(doc.path);
   if (!hunks) continue;
@@ -63,5 +65,7 @@ for (const name of existsSync(commentsDir) ? readdirSync(commentsDir) : []) {
   log.push(`${doc.path}:${doc.line} -> ${next}`);
 }
 writeFileSync(join(state, 'updates.json'), JSON.stringify(writes, null, 2));
+// build.mjs 가 변경 목록에서 빠진 파일의 열린 코멘트도 "변경 없음" 보기로 열 수 있게 싣는다.
+writeFileSync(join(state, 'comment-paths.json'), JSON.stringify([...openPaths].sort(), null, 2));
 console.log(`updates: ${join(state, 'updates.json')} (${writes.length})`);
 for (const line of log) console.log('  ' + line);
