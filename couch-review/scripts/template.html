@@ -121,6 +121,8 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cmt-list .row { grid-template-columns: minmax(0, 1fr) auto; }
 .cmt-list .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .cmt-list .where { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.cmt-list .row.resolved .body { color: var(--muted); text-decoration: line-through; }
+.cmt-list .row.resolved .where::after { content: ' · 해결됨'; }
 
 /* 다크 테마의 코드 영역은 VS Code Dark+ 배경으로 */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .diff {
@@ -172,6 +174,8 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cmt + .cmt { border-top: 1px dashed var(--line); padding-top: 8px; }
 .cmt .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt.done .body { color: var(--muted); text-decoration: line-through; }
+.reply { margin-left: 4px; padding: 4px 0 4px 10px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 2px; }
+.reply .rbody { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; color: var(--ink); text-decoration: none; }
 .cmt .orig { display: flex; flex-direction: column; gap: 2px; }
 .cmt .orig code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
 .cmt .acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
@@ -334,18 +338,21 @@ function renderIndex() {
   main.replaceChildren();
   if (state.dbNote) main.append(el('div', { class: `note${state.readOnly ? ' warn' : ''}`, text: state.dbNote }));
 
-  const open = state.comments.filter((c) => !c.done);
-  const cmtSection = el('section', { class: 'group' }, el('h2', { text: `열린 코멘트 ${open.length}` }));
-  if (!open.length) {
+  const openCount = state.comments.filter((c) => !c.done).length;
+  const doneCount = state.comments.length - openCount;
+  const cmtSection = el('section', { class: 'group' }, el('h2', { text: `코멘트 ${state.comments.length}${state.comments.length ? ` · 열림 ${openCount} · 해결 ${doneCount}` : ''}` }));
+  if (!state.comments.length) {
     cmtSection.append(el('div', { class: 'empty', text: '아직 코멘트가 없습니다. 파일을 열고 줄을 누르면 그 줄에 코멘트를 남길 수 있습니다.' }));
   } else {
     const list = el('div', { class: 'list cmt-list' });
-    for (const c of [...open].sort((a, b) => (a.path + a.side + String(a.line).padStart(6, '0')).localeCompare(b.path + b.side + String(b.line).padStart(6, '0')))) {
+    const sortKey = (c) => (c.done ? '1' : '0') + c.path + c.side + String(c.line).padStart(6, '0');
+    for (const c of [...state.comments].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))) {
       const onPage = BY_ID.has(c.fid) || CTX_BY_ID.has(c.fid);
-      list.append(el(onPage ? 'a' : 'div', { class: 'row', href: onPage ? `#${c.fid}-${c.side}${c.line}` : null },
+      list.append(el(onPage ? 'a' : 'div', { class: `row${c.done ? ' resolved' : ''}`, href: onPage ? `#${c.fid}-${c.side}${c.line}` : null },
         el('div', { style: 'min-width:0;display:flex;flex-direction:column;gap:2px' },
           el('div', { class: 'where', text: `${c.path}:${c.line}${c.side === 'o' ? ' (삭제된 줄)' : ''}` }),
-          el('div', { class: 'body', text: c.body })),
+          el('div', { class: 'body', text: c.body }),
+          ...replyEls(c)),
         el('span', { class: 'meta', text: onPage ? '›' : '변경 목록에 없음' })));
     }
     cmtSection.append(list);
@@ -491,6 +498,7 @@ function renderFile(route) {
   const hideDel = hidesDel(f);
   const diff = el('div', { class: `diff${state.wrap ? '' : ' nowrap'}${hideDel ? ' nodel' : ''}`, id: 'diff' });
   if (f.binary) diff.append(el('div', { class: 'hunk', text: '바이너리 파일이라 내용을 보여 주지 않습니다.' }));
+  if (f.gone) diff.append(el('div', { class: 'hunk', text: '작업 트리에 이 파일이 없습니다(이름이 바뀌었거나 지워짐). 남은 코멘트만 보여 줍니다.' }));
   const lang = LANG[ext(f.path)];
   const keep = new Set(state.comments.filter((c) => c.fid === f.id).map((c) => lineKey(c.side, c.line)));
   if (route.line) keep.add(lineKey(route.side, route.line));
@@ -866,11 +874,13 @@ function threadEl(list, title, current) {
     });
     const node = el('div', { class: `cmt${c.done ? ' done' : ''}` },
       el('div', { class: 'body', text: c.body }),
+      ...replyEls(c),
       typeof c.code === 'string' && (title || c.code !== current)
         ? el('div', { class: 'orig' }, el('span', { class: 'meta', text: title ? '줄 내용' : '원래 줄(그 뒤 바뀜)' }), el('code', { text: c.code || ' ' }))
         : null,
       el('div', { class: 'acts' },
         el('span', { class: 'meta', text: `${lost(c)}${fmtTime(c.at)}${c.editedAt ? ' · 수정됨' : ''}${c.done ? ' · 해결됨' : ''}` }),
+        canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: '', reply: true }; node.replaceWith(cmtEditor(c)); } }, '답글') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: c.body }; node.replaceWith(cmtEditor(c)); } }, '수정') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); toggleDone(c); } }, c.done ? '다시 열기' : '해결') : null,
         canWrite ? del : null));
@@ -878,28 +888,32 @@ function threadEl(list, title, current) {
   }
   // 고치는 중에 다른 코멘트 변경으로 스레드를 다시 그려도 쓰던 글이 남도록 state.editing 에 둔다.
   function cmtEditor(c) {
-    const ta = el('textarea', { 'aria-label': '코멘트 수정' });
+    const reply = !!state.editing.reply;
+    const ta = el('textarea', { 'aria-label': reply ? '답글' : '코멘트 수정', placeholder: reply ? '답글을 달면 해결된 코멘트도 다시 열립니다.' : null });
     ta.value = state.editing.draft;
     ta.addEventListener('input', () => { if (state.editing?.id === c.id) state.editing.draft = ta.value; });
     const err = el('div', { class: 'err', hidden: true });
-    const save = el('button', { class: 'btn primary', type: 'button' }, '저장');
+    const save = el('button', { class: 'btn primary', type: 'button' }, reply ? '답글 달기' : '저장');
     const cancel = el('button', { class: 'btn', type: 'button' }, '취소');
-    const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ta, err, el('div', { class: 'acts' }, cancel, save));
+    const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ...(reply ? [el('div', { class: 'body', text: c.body }), ...replyEls(c)] : []), ta, err, el('div', { class: 'acts' }, cancel, save));
     const close = (next) => { state.editing = null; node.replaceWith(cmtView(next)); };
     cancel.addEventListener('click', () => close(c));
     save.addEventListener('click', async () => {
       const body = ta.value.trim();
       if (!body) { ta.focus(); return; }
-      if (body === c.body) { close(c); return; }
+      if (!reply && body === c.body) { close(c); return; }
       save.disabled = true; save.textContent = '저장 중';
-      const editedAt = new Date().toISOString();
+      const now = new Date().toISOString();
+      const patch = reply
+        ? { replies: [...(Array.isArray(c.replies) ? c.replies : []), { by: '나', body, at: now }], done: false }
+        : { body, editedAt: now };
       try {
-        await state.db.collection('comments').doc(c.id).update({ body, editedAt });
-        close({ ...c, body, editedAt });
+        await state.db.collection('comments').doc(c.id).update(patch);
+        close({ ...c, ...patch });
       } catch (e) {
         err.hidden = false;
         err.textContent = `저장하지 못했습니다(${e?.code || '오류'}). 다시 눌러 주세요.`;
-        save.disabled = false; save.textContent = '저장';
+        save.disabled = false; save.textContent = reply ? '답글 달기' : '저장';
       }
     });
     setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
@@ -1019,6 +1033,12 @@ function flashNote(text) {
   render();
 }
 
+function replyEls(c) {
+  if (!Array.isArray(c.replies)) return [];
+  return c.replies.filter((r) => r && typeof r.body === 'string').map((r) => el('div', { class: 'reply' },
+    el('span', { class: 'meta', text: `↳ ${r.by || 'Claude'}${r.at ? ' · ' + fmtTime(r.at) : ''}` }),
+    el('div', { class: 'rbody', text: r.body })));
+}
 async function removeComment(c) {
   try { await state.db.collection('comments').doc(c.id).delete(); } catch (e) { flashNote(`코멘트를 지우지 못했습니다(${e?.code || '오류'}).`); }
 }

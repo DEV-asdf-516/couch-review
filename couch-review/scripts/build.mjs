@@ -108,8 +108,8 @@ try {
 } catch (error) {
   console.log(`refs skipped: ${error.message}`);
 }
-// 정의가 변경 없는 파일에 있거나(참조 시트에서 정의로 이동), 열린 코멘트가 변경 목록에서 빠진 파일에 있으면
-// 그 파일 전체를 읽기 전용으로 싣는다. 코멘트 경로는 remap.mjs 가 남긴 comment-paths.json.
+// 정의가 변경 없는 파일에 있거나(참조 시트에서 정의로 이동), 코멘트(해결된 것 포함)가 변경 목록에서 빠진 파일에 있으면
+// 그 파일 전체를 읽기 전용으로 싣는다. 코멘트 파일이 작업 트리에서 없어졌으면 내용 없이(gone) 실어 코멘트만 보이게 한다. 코멘트 경로는 remap.mjs 가 남긴 comment-paths.json.
 data.context = [];
 {
   const shownPaths = new Set(files.map((f) => f.path));
@@ -126,13 +126,16 @@ data.context = [];
     ctxPaths.add(path);
   }
   for (const path of [...ctxPaths].sort()) {
+    const id = 'f' + createHash('sha1').update(path).digest('hex').slice(0, 8);
     let text;
-    try { text = readFileSync(join(repo, path), 'utf8'); } catch { continue; }
+    try { text = readFileSync(join(repo, path), 'utf8'); } catch {
+      if (commentPaths.includes(path)) data.context.push({ id, path, status: 'C', ctx: true, gone: true, add: 0, del: 0, binary: false, hunks: [] });
+      continue;
+    }
     const lines = text.split('\n');
     if (lines[lines.length - 1] === '') lines.pop();
     data.context.push({
-      id: 'f' + createHash('sha1').update(path).digest('hex').slice(0, 8),
-      path, status: 'C', ctx: true, add: 0, del: 0, binary: false,
+      id, path, status: 'C', ctx: true, add: 0, del: 0, binary: false,
       hunks: [{ h: '', ctx: '', lines: lines.map((line, i) => [' ', i + 1, i + 1, line]) }],
     });
   }
@@ -164,7 +167,7 @@ const hits = [];
 for (const f of files) for (const h of f.hunks) for (const [t, , n, s] of h.lines) {
   if (t === '+' && SECRET.test(s)) hits.push(`${f.path}:${n}: ${s.trim().slice(0, 160)}`);
 }
-for (const f of data.context) for (const [, , n, s] of f.hunks[0].lines) {
+for (const f of data.context) for (const [, , n, s] of f.hunks[0]?.lines ?? []) {
   if (SECRET.test(s)) hits.push(`${f.path}:${n} (변경 없음): ${s.trim().slice(0, 160)}`);
 }
 // 참조 목록에 실리는, 변경 없는 파일의 줄도 본다.
