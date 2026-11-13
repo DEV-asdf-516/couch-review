@@ -174,7 +174,10 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cmt + .cmt { border-top: 1px dashed var(--line); padding-top: 8px; }
 .cmt .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt.done .body { color: var(--muted); text-decoration: line-through; }
+.cmt.folded { cursor: pointer; }
+.cmt.folded .body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .reply { margin-left: 4px; padding: 4px 0 4px 10px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 2px; }
+.reply .acts { margin-top: 2px; }
 .reply .rbody { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; color: var(--ink); text-decoration: none; }
 .cmt .orig { display: flex; flex-direction: column; gap: 2px; }
 .cmt .orig code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
@@ -247,7 +250,7 @@ for (const f of CONTEXT) BY_PATH.set(f.path, f);
 const fileById = (id) => (BY_ID.has(id) ? FILES[BY_ID.get(id)] : CTX_BY_ID.get(id));
 const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', md: 'markdown', yml: 'yaml', yaml: 'yaml', sh: 'bash', css: 'css', html: 'xml', java: 'java', kt: 'kotlin', kts: 'kotlin', sql: 'sql', xml: 'xml', properties: 'ini', toml: 'ini', ini: 'ini', py: 'python', go: 'go', rs: 'rust', diff: 'diff' };
 
-const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [] };
+const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map() };
 const CHECKS_DOC = 'checks/all';
 try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; } catch {}
 const THEME_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
@@ -872,9 +875,24 @@ function threadEl(list, title, current) {
       del.dataset.arm = '1'; del.textContent = '한 번 더 눌러 삭제'; del.classList.add('on');
       setTimeout(() => { delete del.dataset.arm; del.textContent = '삭제'; del.classList.remove('on'); }, 3000);
     });
+    const folded = state.cmtFold.has(c.id) ? state.cmtFold.get(c.id) : !!c.done;
+    const toggleFold = (e) => { e.stopPropagation(); state.cmtFold.set(c.id, !folded); e.currentTarget.closest('.cmt').replaceWith(cmtView(c)); };
+    const replyCount = Array.isArray(c.replies) ? c.replies.length : 0;
+    if (folded) {
+      const node = el('div', { class: `cmt folded${c.done ? ' done' : ''}`, onclick: toggleFold },
+        el('div', { class: 'body', text: c.body }),
+        el('div', { class: 'acts' },
+          el('span', { class: 'meta', text: `${lost(c)}${fmtTime(c.at)}${replyCount ? ` · 답글 ${replyCount}` : ''}${c.done ? ' · 해결됨' : ''}` }),
+          el('button', { class: 'btn', type: 'button', onclick: toggleFold }, '펼치기'),
+          canWrite ? del : null));
+      return node;
+    }
     const node = el('div', { class: `cmt${c.done ? ' done' : ''}` },
       el('div', { class: 'body', text: c.body }),
-      ...replyEls(c),
+      ...replyEls(c, canWrite ? {
+        edit: (i) => { state.editing = { id: c.id, draft: c.replies[i].body, replyIndex: i }; node.replaceWith(cmtEditor(c)); },
+        remove: (i) => removeReply(c, i),
+      } : null),
       typeof c.code === 'string' && (title || c.code !== current)
         ? el('div', { class: 'orig' }, el('span', { class: 'meta', text: title ? '줄 내용' : '원래 줄(그 뒤 바뀜)' }), el('code', { text: c.code || ' ' }))
         : null,
@@ -883,13 +901,15 @@ function threadEl(list, title, current) {
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: '', reply: true }; node.replaceWith(cmtEditor(c)); } }, '답글') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: c.body }; node.replaceWith(cmtEditor(c)); } }, '수정') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); toggleDone(c); } }, c.done ? '다시 열기' : '해결') : null,
-        canWrite ? del : null));
+        canWrite ? del : null,
+        el('button', { class: 'btn', type: 'button', onclick: toggleFold }, '접기')));
     return node;
   }
   // 고치는 중에 다른 코멘트 변경으로 스레드를 다시 그려도 쓰던 글이 남도록 state.editing 에 둔다.
   function cmtEditor(c) {
     const reply = !!state.editing.reply;
-    const ta = el('textarea', { 'aria-label': reply ? '답글' : '코멘트 수정', placeholder: reply ? '답글을 달면 해결된 코멘트도 다시 열립니다.' : null });
+    const replyIndex = state.editing.replyIndex ?? null;
+    const ta = el('textarea', { 'aria-label': reply ? '답글' : replyIndex !== null ? '답글 수정' : '코멘트 수정', placeholder: reply ? '답글을 달면 해결된 코멘트도 다시 열립니다.' : null });
     ta.value = state.editing.draft;
     ta.addEventListener('input', () => { if (state.editing?.id === c.id) state.editing.draft = ta.value; });
     const err = el('div', { class: 'err', hidden: true });
@@ -901,12 +921,15 @@ function threadEl(list, title, current) {
     save.addEventListener('click', async () => {
       const body = ta.value.trim();
       if (!body) { ta.focus(); return; }
-      if (!reply && body === c.body) { close(c); return; }
+      if (!reply && body === (replyIndex !== null ? c.replies?.[replyIndex]?.body : c.body)) { close(c); return; }
       save.disabled = true; save.textContent = '저장 중';
       const now = new Date().toISOString();
+      const replies = Array.isArray(c.replies) ? c.replies : [];
       const patch = reply
-        ? { replies: [...(Array.isArray(c.replies) ? c.replies : []), { by: '나', body, at: now }], done: false }
-        : { body, editedAt: now };
+        ? { replies: [...replies, { by: '나', body, at: now }], done: false }
+        : replyIndex !== null
+          ? { replies: replies.map((r, j) => (j === replyIndex ? { ...r, body, editedAt: now } : r)) }
+          : { body, editedAt: now };
       try {
         await state.db.collection('comments').doc(c.id).update(patch);
         close({ ...c, ...patch });
@@ -1033,11 +1056,33 @@ function flashNote(text) {
   render();
 }
 
-function replyEls(c) {
+function replyEls(c, acts) {
   if (!Array.isArray(c.replies)) return [];
-  return c.replies.filter((r) => r && typeof r.body === 'string').map((r) => el('div', { class: 'reply' },
-    el('span', { class: 'meta', text: `↳ ${r.by || 'Claude'}${r.at ? ' · ' + fmtTime(r.at) : ''}` }),
-    el('div', { class: 'rbody', text: r.body })));
+  const out = [];
+  c.replies.forEach((r, i) => {
+    if (!r || typeof r.body !== 'string') return;
+    let del = null;
+    if (acts) {
+      del = el('button', { class: 'btn', type: 'button' }, '삭제');
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (del.dataset.arm) { acts.remove(i); return; }
+        del.dataset.arm = '1'; del.textContent = '한 번 더 눌러 삭제'; del.classList.add('on');
+        setTimeout(() => { delete del.dataset.arm; del.textContent = '삭제'; del.classList.remove('on'); }, 3000);
+      });
+    }
+    out.push(el('div', { class: 'reply' },
+      el('span', { class: 'meta', text: `↳ ${r.by || 'Claude'}${r.at ? ' · ' + fmtTime(r.at) : ''}${r.editedAt ? ' · 수정됨' : ''}` }),
+      el('div', { class: 'rbody', text: r.body }),
+      acts ? el('div', { class: 'acts' },
+        el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); acts.edit(i); } }, '수정'),
+        del) : null));
+  });
+  return out;
+}
+async function removeReply(c, i) {
+  const replies = (c.replies || []).filter((_, j) => j !== i);
+  try { await state.db.collection('comments').doc(c.id).update({ replies }); } catch (e) { flashNote(`답글을 지우지 못했습니다(${e?.code || '오류'}).`); }
 }
 async function removeComment(c) {
   try { await state.db.collection('comments').doc(c.id).delete(); } catch (e) { flashNote(`코멘트를 지우지 못했습니다(${e?.code || '오류'}).`); }
