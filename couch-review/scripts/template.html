@@ -140,7 +140,8 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
   color: var(--ink);
 }
 .diff { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; }
-.diff.nowrap { overflow-x: auto; }
+/* 가로 스크롤 시 줄 배경이 가장 긴 줄 끝까지 이어지도록 모든 줄을 같은 폭(가장 긴 줄, 최소 화면 폭)으로 맞춘다 */
+.diff.nowrap { overflow-x: auto; display: grid; grid-template-columns: minmax(max-content, 1fr); container-type: inline-size; }
 .hunk { background: var(--hunk); color: var(--muted); padding: 4px 10px; font-size: 12px; overflow-wrap: anywhere; border-top: 1px solid var(--line); }
 .hunk:first-child { border-top: 0; }
 .ln { display: grid; grid-template-columns: 3.6ch 3.6ch 1.6em minmax(0, 1fr); cursor: pointer; scroll-margin-top: var(--bar-h, 120px); }
@@ -169,15 +170,19 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 @media (prefers-reduced-motion: reduce) { .ln.flash { animation: none; background: var(--flash); } }
 
 .thread, .composer { font-family: var(--ui); font-size: 14px; background: var(--cmt-bg); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-.nowrap .thread, .nowrap .composer { position: sticky; left: 0; max-width: calc(100vw - 34px); }
+.nowrap .thread, .nowrap .composer { position: sticky; left: 0; box-sizing: border-box; max-width: 100cqw; }
 .cmt { display: flex; flex-direction: column; gap: 4px; }
 .cmt + .cmt { border-top: 1px dashed var(--line); padding-top: 8px; }
 .cmt .body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cmt.done .body { color: var(--muted); text-decoration: line-through; }
 .cmt.folded { cursor: pointer; }
 .cmt.folded .body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.reply { margin-left: 4px; padding: 4px 0 4px 10px; border-left: 2px solid var(--accent); display: flex; flex-direction: column; gap: 2px; }
+.reply { margin-left: 4px; padding: 4px 8px 4px 10px; border-radius: 0 6px 6px 0; border-left: 3px solid var(--accent); display: flex; flex-direction: column; gap: 2px; }
 .reply .acts { margin-top: 2px; }
+.reply.mine { border-left-color: var(--fn); background: color-mix(in srgb, var(--fn) 8%, transparent); }
+.reply.claude { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.reply.mine > .meta:first-child { color: var(--fn); }
+.reply.claude > .meta:first-child { color: var(--accent); }
 .reply .rbody { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; color: var(--ink); text-decoration: none; }
 .cmt .orig { display: flex; flex-direction: column; gap: 2px; }
 .cmt .orig code { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
@@ -188,7 +193,7 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .composer .err, .cmt.editing .err { color: var(--del-ink); font-size: 13px; }
 
 .fold { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--hunk); color: var(--muted); font-family: var(--ui); font-size: 12.5px; padding: 6px 12px; cursor: pointer; }
-.nowrap .fold { position: sticky; left: 0; width: calc(100vw - 34px); }
+.nowrap .fold { position: sticky; left: 0; box-sizing: border-box; width: 100cqw; }
 .jump {
   position: fixed; z-index: 6;
   right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
@@ -1071,7 +1076,7 @@ function replyEls(c, acts) {
         setTimeout(() => { delete del.dataset.arm; del.textContent = '삭제'; del.classList.remove('on'); }, 3000);
       });
     }
-    out.push(el('div', { class: 'reply' },
+    out.push(el('div', { class: `reply ${r.by === '나' ? 'mine' : 'claude'}` },
       el('span', { class: 'meta', text: `↳ ${r.by || 'Claude'}${r.at ? ' · ' + fmtTime(r.at) : ''}${r.editedAt ? ' · 수정됨' : ''}` }),
       el('div', { class: 'rbody', text: r.body }),
       acts ? el('div', { class: 'acts' },
