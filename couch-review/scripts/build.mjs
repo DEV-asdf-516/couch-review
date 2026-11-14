@@ -14,7 +14,7 @@ const repo = resolve(process.argv[2] ?? '.');
 const here = dirname(fileURLToPath(import.meta.url));
 const git = (args) => {
   try {
-    return execFileSync('git', args, { cwd: repo, encoding: 'utf8', maxBuffer: 1 << 28 });
+    return execFileSync('git', ['-c', 'core.quotepath=off', ...args], { cwd: repo, encoding: 'utf8', maxBuffer: 1 << 28 });
   } catch (error) {
     if (error.status === 1 && typeof error.stdout === 'string') return error.stdout;
     throw error;
@@ -31,17 +31,33 @@ for (const path of untracked) {
   chunks.push(git(['diff', '--no-color', '--no-ext-diff', '--no-index', CONTEXT, '/dev/null', path]));
 }
 
+// git 은 따옴표·제어문자 경로를 "..." 와 8진 이스케이프로 감싼다. 원래 UTF-8 경로로 되돌린다.
+const unquote = (raw) => {
+  const text = raw.replace(/\t$/, '');
+  if (!text.startsWith('"')) return text;
+  const bytes = [];
+  const body = text.slice(1, text.lastIndexOf('"'));
+  const named = { n: 10, t: 9, r: 13, '"': 34, '\\': 92, a: 7, b: 8, f: 12, v: 11 };
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] !== '\\') { bytes.push(...Buffer.from(body[i])); continue; }
+    const octal = body.slice(i + 1, i + 4);
+    if (/^[0-7]{3}$/.test(octal)) { bytes.push(parseInt(octal, 8)); i += 3; continue; }
+    bytes.push(named[body[i + 1]] ?? body.charCodeAt(i + 1)); i++;
+  }
+  return Buffer.from(bytes).toString('utf8');
+};
+
 const files = [];
 for (const block of chunks.join('\n').split(/^(?=diff --git )/m)) {
   if (!block.startsWith('diff --git ')) continue;
   const rows = block.split('\n');
   const plus = rows.find((r) => r.startsWith('+++ '));
   const minus = rows.find((r) => r.startsWith('--- '));
-  const header = rows[0].match(/^diff --git a\/(.+) b\/(.+)$/);
-  let path = header ? header[2] : rows[0];
+  const header = rows[0].match(/^diff --git ("?a\/.+"?) ("?b\/.+"?)$/);
+  let path = header ? unquote(header[2]).slice(2) : rows[0];
   let status = 'M';
-  if (plus && plus !== '+++ /dev/null') path = plus.slice(6);
-  else if (minus) path = minus.slice(6);
+  if (plus && plus !== '+++ /dev/null') path = unquote(plus.slice(4)).slice(2);
+  else if (minus && minus !== '--- /dev/null') path = unquote(minus.slice(4)).slice(2);
   if (minus === '--- /dev/null') status = 'A';
   if (plus === '+++ /dev/null') status = 'D';
   const file = {

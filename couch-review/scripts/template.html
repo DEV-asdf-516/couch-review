@@ -106,6 +106,17 @@ h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: v
 .tick:has(input:disabled) { cursor: default; }
 h2.with-tick { display: flex; align-items: center; min-height: 24px; }
 h2.with-tick .tick { min-height: 24px; }
+h2.with-tabs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h2 .tabs { display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; }
+h2 .tabs .btn { min-height: 30px; padding: 3px 10px; font-size: 12.5px; }
+.batch { margin-top: 8px; }
+.batch > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 2px; font-size: 13.5px; color: var(--muted); list-style: none; }
+.batch > summary::-webkit-details-marker { display: none; }
+.batch > summary::before { content: "▸"; width: 1em; }
+.batch[open] > summary::before { content: "▾"; }
+.batch.latest > summary { color: var(--ink); font-weight: 600; }
+.cmt-list .body.clip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmt-list .go { min-height: 30px; min-width: 34px; padding: 0 8px; justify-content: center; color: var(--muted); }
 h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .row.done .p b { color: var(--add-ink); }
 .row .r { display: flex; gap: 8px; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -122,7 +133,9 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cmt-list .body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .cmt-list .where { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .cmt-list .row.resolved .body { color: var(--muted); text-decoration: line-through; }
-.cmt-list .row.resolved .where::after { content: ' · 해결됨'; }
+.cmt-list .row.fold-row { grid-template-columns: 28px minmax(0, 1fr) auto; align-items: start; gap: 8px; padding-left: 6px; }
+.cmt-list .row.fold-row .cmt-tog { margin: 0; padding: 2px 0; width: 28px; text-align: center; }
+.cmt-list .row.fold-row .r { white-space: nowrap; }
 
 /* 다크 테마의 코드 영역은 VS Code Dark+ 배경으로 */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .diff {
@@ -165,6 +178,12 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .ln.delmark { box-shadow: inset 0 2px var(--del-ink); }
 .ln:hover > .c { box-shadow: inset 2px 0 var(--accent); }
 .ln.has-cmt > .n, .ln.has-cmt > .o { box-shadow: inset -3px 0 var(--accent); }
+.ln { position: relative; }
+.cmt-badge { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); z-index: 1; font-family: var(--ui); font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 99px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; cursor: pointer; }
+.cmt-badge.done { border-color: var(--line); background: var(--hunk); color: var(--muted); font-weight: 400; }
+.nowrap .cmt-badge { position: sticky; right: 6px; transform: none; grid-column: 4; grid-row: 1; justify-self: end; align-self: center; }
+.ln:has(> .cmt-badge) > .c { padding-right: 64px; }
+.nowrap .ln:has(> .cmt-badge) > .c { padding-right: 10px; }
 .ln.flash { animation: flash 2.4s ease-out; }
 @keyframes flash { 0%, 40% { background: var(--flash); } }
 @media (prefers-reduced-motion: reduce) { .ln.flash { animation: none; background: var(--flash); } }
@@ -177,6 +196,10 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .cmt.done .body { color: var(--muted); text-decoration: line-through; }
 .cmt.folded { cursor: pointer; }
 .cmt.folded .body { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmt-head { display: flex; align-items: flex-start; gap: 8px; }
+.cmt-head .body { flex: 1; min-width: 0; }
+.cmt-tog { flex: none; border: 0; background: none; color: var(--muted); font-size: 14px; line-height: 1; padding: 4px 6px; margin: -4px -6px 0 0; border-radius: 4px; cursor: pointer; }
+.cmt-tog:hover { color: var(--ink); background: var(--hunk); }
 .reply { margin-left: 4px; padding: 4px 8px 4px 10px; border-radius: 0 6px 6px 0; border-left: 3px solid var(--accent); display: flex; flex-direction: column; gap: 2px; }
 .reply .acts { margin-top: 2px; }
 .reply.mine { border-left-color: var(--fn); background: color-mix(in srgb, var(--fn) 8%, transparent); }
@@ -255,7 +278,7 @@ for (const f of CONTEXT) BY_PATH.set(f.path, f);
 const fileById = (id) => (BY_ID.has(id) ? FILES[BY_ID.get(id)] : CTX_BY_ID.get(id));
 const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', md: 'markdown', yml: 'yaml', yaml: 'yaml', sh: 'bash', css: 'css', html: 'xml', java: 'java', kt: 'kotlin', kts: 'kotlin', sql: 'sql', xml: 'xml', properties: 'ini', toml: 'ini', ini: 'ini', py: 'python', go: 'go', rs: 'rust', diff: 'diff' };
 
-const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map() };
+const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map(), threadFold: new Map(), cmtTab: 'open', cmtOpen: new Set(), batchOpen: new Map() };
 const CHECKS_DOC = 'checks/all';
 try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; } catch {}
 const THEME_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
@@ -317,6 +340,28 @@ function progressBar() {
   return el('div', { class: 'progress', role: 'progressbar', 'aria-valuenow': Math.round(pct), 'aria-valuemin': 0, 'aria-valuemax': 100 }, el('i', { style: `width:${pct}%` }));
 }
 
+const cmtSortKey = (c) => c.path + c.side + String(c.line).padStart(6, '0');
+// 해결 시각: 페이지·Claude 가 남긴 doneAt, 없으면 마지막 Claude 답글 시각, 그것도 없으면 작성 시각
+const resolvedAt = (c) => c.doneAt || (Array.isArray(c.replies) ? c.replies.filter((r) => r && r.by !== '나' && r.at).map((r) => r.at).sort().pop() : null) || c.at || '';
+function commentRow(c, expanded) {
+  const onPage = BY_ID.has(c.fid) || CTX_BY_ID.has(c.fid);
+  const where = `${c.path}:${c.line}${c.side === 'o' ? ' (삭제된 줄)' : ''}`;
+  const replyCount = Array.isArray(c.replies) ? c.replies.length : 0;
+  const content = el('div', { style: 'min-width:0;display:flex;flex-direction:column;gap:2px' },
+    el('div', { class: 'where', text: where }),
+    el('div', { class: `body${expanded ? '' : ' clip'}`, text: c.body }),
+    ...(expanded ? replyEls(c) : []));
+  const go = onPage
+    ? el('a', { class: 'btn go', href: `#${c.fid}-${c.side}${c.line}`, title: '이 줄로 이동', 'aria-label': `${where} 로 이동` })
+    : el('span', { class: 'meta', text: '변경 목록에 없음' });
+  if (onPage) go.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+  if (!c.done) return el(onPage ? 'a' : 'div', { class: 'row', href: onPage ? `#${c.fid}-${c.side}${c.line}` : null }, content, el('span', { class: 'meta', text: onPage ? '›' : '변경 목록에 없음' }));
+  const toggle = el('button', { type: 'button', class: 'cmt-tog', 'aria-expanded': String(expanded), 'aria-label': expanded ? '접기' : '펼치기',
+    onclick: () => { if (expanded) state.cmtOpen.delete(c.id); else state.cmtOpen.add(c.id); renderIndex(); }, text: expanded ? '▾' : '▸' });
+  return el('div', { class: 'row resolved fold-row' }, toggle, content,
+    el('span', { class: 'r' }, !expanded && replyCount ? el('span', { class: 'meta', text: `답글 ${replyCount}` }) : null, go));
+}
+
 function renderIndex() {
   const typing = document.activeElement?.id === 'gfind-q';
   const add = FILES.reduce((s, f) => s + f.add, 0);
@@ -348,22 +393,41 @@ function renderIndex() {
 
   const openCount = state.comments.filter((c) => !c.done).length;
   const doneCount = state.comments.length - openCount;
-  const cmtSection = el('section', { class: 'group' }, el('h2', { text: `코멘트 ${state.comments.length}${state.comments.length ? ` · 열림 ${openCount} · 해결 ${doneCount}` : ''}` }));
+  const tabBtn = (tab, label) => el('button', { type: 'button', class: `btn${state.cmtTab === tab ? ' on' : ''}`, 'aria-pressed': String(state.cmtTab === tab), onclick: () => { state.cmtTab = tab; renderIndex(); }, text: label });
+  const cmtSection = el('section', { class: 'group' },
+    el('h2', { class: 'with-tabs' }, `코멘트 ${state.comments.length}`,
+      state.comments.length ? el('span', { class: 'tabs' }, tabBtn('open', `열림 ${openCount}`), tabBtn('done', `해결됨 ${doneCount}`)) : null));
+  const shown = state.comments.filter((c) => (state.cmtTab === 'done') === Boolean(c.done));
   if (!state.comments.length) {
     cmtSection.append(el('div', { class: 'empty', text: '아직 코멘트가 없습니다. 파일을 열고 줄을 누르면 그 줄에 코멘트를 남길 수 있습니다.' }));
-  } else {
+  } else if (!shown.length) {
+    cmtSection.append(el('div', { class: 'empty', text: state.cmtTab === 'done' ? '해결된 코멘트가 없습니다.' : '열린 코멘트가 없습니다. 해결된 코멘트는 "해결됨" 탭에서 볼 수 있습니다.' }));
+  } else if (state.cmtTab === 'open') {
     const list = el('div', { class: 'list cmt-list' });
-    const sortKey = (c) => (c.done ? '1' : '0') + c.path + c.side + String(c.line).padStart(6, '0');
-    for (const c of [...state.comments].sort((a, b) => sortKey(a).localeCompare(sortKey(b)))) {
-      const onPage = BY_ID.has(c.fid) || CTX_BY_ID.has(c.fid);
-      list.append(el(onPage ? 'a' : 'div', { class: `row${c.done ? ' resolved' : ''}`, href: onPage ? `#${c.fid}-${c.side}${c.line}` : null },
-        el('div', { style: 'min-width:0;display:flex;flex-direction:column;gap:2px' },
-          el('div', { class: 'where', text: `${c.path}:${c.line}${c.side === 'o' ? ' (삭제된 줄)' : ''}` }),
-          el('div', { class: 'body', text: c.body }),
-          ...replyEls(c)),
-        el('span', { class: 'meta', text: onPage ? '›' : '변경 목록에 없음' })));
-    }
+    for (const c of [...shown].sort((a, b) => cmtSortKey(a).localeCompare(cmtSortKey(b)))) list.append(commentRow(c, true));
     cmtSection.append(list);
+  } else {
+    // 해결 시각이 30분 안쪽으로 붙은 것끼리 한 번의 반영으로 묶는다. 최근 묶음만 펼친다.
+    const done = shown.map((c) => ({ c, t: resolvedAt(c) })).sort((a, b) => b.t.localeCompare(a.t));
+    const batches = [];
+    for (const item of done) {
+      const last = batches[batches.length - 1];
+      if (last && Date.parse(last.items[last.items.length - 1].t) - Date.parse(item.t) <= 30 * 60 * 1000) last.items.push(item);
+      else batches.push({ items: [item] });
+    }
+    batches.forEach((batch, i) => {
+      const key = batch.items[batch.items.length - 1].t;
+      const open = state.batchOpen.has(key) ? state.batchOpen.get(key) : i === 0;
+      const list = el('div', { class: 'list cmt-list' });
+      for (const { c } of batch.items.sort((a, b) => cmtSortKey(a.c).localeCompare(cmtSortKey(b.c)))) list.append(commentRow(c, state.cmtOpen.has(c.id)));
+      const box = el('details', { class: `batch${i === 0 ? ' latest' : ''}`, open, ontoggle: (e) => state.batchOpen.set(key, e.target.open) },
+        el('summary', {},
+          el('span', { class: 'batch-title', text: `${fmtTime(batch.items[0].t)} 해결` }),
+          i === 0 ? el('span', { class: 'chip', text: '최근' }) : null,
+          el('span', { class: 'meta', text: `${batch.items.length}건` })),
+        list);
+      cmtSection.append(box);
+    });
   }
   main.append(cmtSection);
   main.append(el('section', { class: 'group', id: 'gresults', hidden: true }));
@@ -372,7 +436,8 @@ function renderIndex() {
 
   const groups = new Map();
   for (const f of FILES) {
-    const top = f.path.includes('/') ? f.path.split('/')[0] + '/' : '루트';
+    const parts = f.path.split('/');
+    const top = parts.length === 1 ? '루트' : parts[0] === 'src' && parts.length > 2 ? `src/${parts[1]}/` : parts[0] + '/';
     if (!groups.has(top)) groups.set(top, []);
     groups.get(top).push(f);
   }
@@ -844,6 +909,7 @@ function paintThreads(f) {
   if (!diff) return;
   diff.querySelectorAll('.thread').forEach((n) => n.remove());
   diff.querySelectorAll('.ln.has-cmt').forEach((n) => n.classList.remove('has-cmt'));
+  diff.querySelectorAll('.cmt-badge').forEach((n) => n.remove());
   const mine = state.comments.filter((c) => c.fid === f.id);
   const byKey = new Map();
   for (const c of mine) {
@@ -856,14 +922,23 @@ function paintThreads(f) {
     const row = diff.querySelector(`.ln[data-key="${k}"]`);
     if (!row) { lost.push(...list); continue; }
     row.classList.add('has-cmt');
+    // 접으면 스레드 전체를 숨기고 줄 오른쪽 말풍선으로 남긴다. 모두 해결된 스레드는 처음부터 접는다.
+    const foldKey = `${f.id}:${k}`;
+    const folded = state.threadFold.has(foldKey) ? state.threadFold.get(foldKey) : list.every((c) => c.done);
+    if (folded) {
+      const open = list.filter((c) => !c.done).length;
+      row.append(el('button', { type: 'button', class: `cmt-badge${open ? '' : ' done'}`, title: '코멘트 펼치기', 'aria-label': `코멘트 ${list.length}개 펼치기`,
+        onclick: (e) => { e.stopPropagation(); state.threadFold.set(foldKey, false); paintThreads(f); } }, `💬 ${list.length}`));
+      continue;
+    }
     const anchor = row.nextElementSibling?.classList.contains('composer') ? row.nextElementSibling : row;
-    anchor.after(threadEl(list, null, row.dataset.code));
+    anchor.after(threadEl(list, null, row.dataset.code, () => { state.threadFold.set(foldKey, true); paintThreads(f); }));
   }
   if (lost.length) diff.prepend(threadEl(lost, '이 diff 에서 줄을 찾지 못한 코멘트'));
   applyFolds();
 }
 
-function threadEl(list, title, current) {
+function threadEl(list, title, current, onFold) {
   const box = el('div', { class: 'thread' });
   if (title) box.append(el('div', { class: 'meta', text: title }));
   for (const c of [...list].sort((a, b) => a.at.localeCompare(b.at))) {
@@ -880,20 +955,11 @@ function threadEl(list, title, current) {
       del.dataset.arm = '1'; del.textContent = '한 번 더 눌러 삭제'; del.classList.add('on');
       setTimeout(() => { delete del.dataset.arm; del.textContent = '삭제'; del.classList.remove('on'); }, 3000);
     });
-    const folded = state.cmtFold.has(c.id) ? state.cmtFold.get(c.id) : !!c.done;
-    const toggleFold = (e) => { e.stopPropagation(); state.cmtFold.set(c.id, !folded); e.currentTarget.closest('.cmt').replaceWith(cmtView(c)); };
-    const replyCount = Array.isArray(c.replies) ? c.replies.length : 0;
-    if (folded) {
-      const node = el('div', { class: `cmt folded${c.done ? ' done' : ''}`, onclick: toggleFold },
-        el('div', { class: 'body', text: c.body }),
-        el('div', { class: 'acts' },
-          el('span', { class: 'meta', text: `${lost(c)}${fmtTime(c.at)}${replyCount ? ` · 답글 ${replyCount}` : ''}${c.done ? ' · 해결됨' : ''}` }),
-          el('button', { class: 'btn', type: 'button', onclick: toggleFold }, '펼치기'),
-          canWrite ? del : null));
-      return node;
-    }
-    const node = el('div', { class: `cmt${c.done ? ' done' : ''}` },
+    const head = el('div', { class: 'cmt-head' },
       el('div', { class: 'body', text: c.body }),
+      onFold ? el('button', { class: 'cmt-tog', type: 'button', 'aria-label': '코멘트 접기', title: '접기', onclick: (e) => { e.stopPropagation(); onFold(); } }, '▾') : null);
+    const node = el('div', { class: `cmt${c.done ? ' done' : ''}` },
+      head,
       ...replyEls(c, canWrite ? {
         edit: (i) => { state.editing = { id: c.id, draft: c.replies[i].body, replyIndex: i }; node.replaceWith(cmtEditor(c)); },
         remove: (i) => removeReply(c, i),
@@ -906,8 +972,7 @@ function threadEl(list, title, current) {
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: '', reply: true }; node.replaceWith(cmtEditor(c)); } }, '답글') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); state.editing = { id: c.id, draft: c.body }; node.replaceWith(cmtEditor(c)); } }, '수정') : null,
         canWrite ? el('button', { class: 'btn', type: 'button', onclick: (e) => { e.stopPropagation(); toggleDone(c); } }, c.done ? '다시 열기' : '해결') : null,
-        canWrite ? del : null,
-        el('button', { class: 'btn', type: 'button', onclick: toggleFold }, '접기')));
+        canWrite ? del : null));
     return node;
   }
   // 고치는 중에 다른 코멘트 변경으로 스레드를 다시 그려도 쓰던 글이 남도록 state.editing 에 둔다.
@@ -1093,7 +1158,7 @@ async function removeComment(c) {
   try { await state.db.collection('comments').doc(c.id).delete(); } catch (e) { flashNote(`코멘트를 지우지 못했습니다(${e?.code || '오류'}).`); }
 }
 async function toggleDone(c) {
-  try { await state.db.collection('comments').doc(c.id).update({ done: !c.done }); } catch (e) { flashNote(`상태를 바꾸지 못했습니다(${e?.code || '오류'}).`); }
+  try { await state.db.collection('comments').doc(c.id).update(c.done ? { done: false } : { done: true, doneAt: new Date().toISOString() }); } catch (e) { flashNote(`상태를 바꾸지 못했습니다(${e?.code || '오류'}).`); }
 }
 // db 에 일괄 쓰기가 없어 파일마다 문서를 두면 섹션 일괄 처리가 한 건씩 느리게 저장된다.
 // 그래서 확인 표시는 문서 하나(checks/all)의 files 맵에 두고, update 가 중첩 객체를 병합하는 것으로 한 번에 쓴다.
