@@ -110,6 +110,8 @@ h2.with-tabs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 h2 .tabs { display: inline-flex; gap: 6px; text-transform: none; letter-spacing: 0; }
 h2 .tabs .btn { min-height: 30px; padding: 3px 10px; font-size: 12.5px; }
 .batch { margin-top: 8px; }
+.cmt-sub { margin: 14px 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.cmt-sub:first-of-type { margin-top: 4px; }
 .batch > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 6px 2px; font-size: 13.5px; color: var(--muted); list-style: none; }
 .batch > summary::-webkit-details-marker { display: none; }
 .batch > summary::before { content: "▸"; width: 1em; }
@@ -278,9 +280,9 @@ for (const f of CONTEXT) BY_PATH.set(f.path, f);
 const fileById = (id) => (BY_ID.has(id) ? FILES[BY_ID.get(id)] : CTX_BY_ID.get(id));
 const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'javascript', cjs: 'javascript', json: 'json', md: 'markdown', yml: 'yaml', yaml: 'yaml', sh: 'bash', css: 'css', html: 'xml', java: 'java', kt: 'kotlin', kts: 'kotlin', sql: 'sql', xml: 'xml', properties: 'ini', toml: 'ini', ini: 'ini', py: 'python', go: 'go', rs: 'rust', diff: 'diff' };
 
-const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map(), threadFold: new Map(), cmtTab: 'open', cmtOpen: new Set(), batchOpen: new Map() };
+const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map(), threadFold: new Set(), cmtTab: 'all', cmtOpen: new Set(), batchOpen: new Map() };
 const CHECKS_DOC = 'checks/all';
-try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; } catch {}
+try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; state.threadFold = new Set(JSON.parse(localStorage.getItem('threadFold') || '[]')); } catch {}
 const THEME_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
 const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
 const applyTheme = () => {
@@ -341,8 +343,12 @@ function progressBar() {
 }
 
 const cmtSortKey = (c) => c.path + c.side + String(c.line).padStart(6, '0');
-// 해결 시각: 페이지·Claude 가 남긴 doneAt, 없으면 마지막 Claude 답글 시각, 그것도 없으면 작성 시각
-const resolvedAt = (c) => c.doneAt || (Array.isArray(c.replies) ? c.replies.filter((r) => r && r.by !== '나' && r.at).map((r) => r.at).sort().pop() : null) || c.at || '';
+// 해결 시각: doneAt 과 답글 시각 중 가장 늦은 것. 다시 열렸다 답글로 다시 해결된 코멘트가 옛 doneAt 에 묶여 예전 묶음에 남지 않게 한다.
+const resolvedAt = (c) => [c.doneAt, ...(Array.isArray(c.replies) ? c.replies.map((r) => r?.at) : []), c.at].filter(Boolean).sort().pop() || '';
+function setThreadFold(key, folded) {
+  if (folded) state.threadFold.add(key); else state.threadFold.delete(key);
+  try { localStorage.setItem('threadFold', JSON.stringify([...state.threadFold])); } catch {}
+}
 function commentRow(c, expanded) {
   const onPage = BY_ID.has(c.fid) || CTX_BY_ID.has(c.fid);
   const where = `${c.path}:${c.line}${c.side === 'o' ? ' (삭제된 줄)' : ''}`;
@@ -395,20 +401,18 @@ function renderIndex() {
   const doneCount = state.comments.length - openCount;
   const tabBtn = (tab, label) => el('button', { type: 'button', class: `btn${state.cmtTab === tab ? ' on' : ''}`, 'aria-pressed': String(state.cmtTab === tab), onclick: () => { state.cmtTab = tab; renderIndex(); }, text: label });
   const cmtSection = el('section', { class: 'group' },
-    el('h2', { class: 'with-tabs' }, `코멘트 ${state.comments.length}`,
-      state.comments.length ? el('span', { class: 'tabs' }, tabBtn('open', `열림 ${openCount}`), tabBtn('done', `해결됨 ${doneCount}`)) : null));
-  const shown = state.comments.filter((c) => (state.cmtTab === 'done') === Boolean(c.done));
-  if (!state.comments.length) {
-    cmtSection.append(el('div', { class: 'empty', text: '아직 코멘트가 없습니다. 파일을 열고 줄을 누르면 그 줄에 코멘트를 남길 수 있습니다.' }));
-  } else if (!shown.length) {
-    cmtSection.append(el('div', { class: 'empty', text: state.cmtTab === 'done' ? '해결된 코멘트가 없습니다.' : '열린 코멘트가 없습니다. 해결된 코멘트는 "해결됨" 탭에서 볼 수 있습니다.' }));
-  } else if (state.cmtTab === 'open') {
+    el('h2', { class: 'with-tabs' }, '코멘트',
+      state.comments.length ? el('span', { class: 'tabs' }, tabBtn('all', `전체 ${state.comments.length}`), tabBtn('open', `열림 ${openCount}`), tabBtn('done', `해결됨 ${doneCount}`)) : null));
+  const openList = state.comments.filter((c) => !c.done);
+  const doneList = state.comments.filter((c) => c.done);
+  const appendOpen = () => {
     const list = el('div', { class: 'list cmt-list' });
-    for (const c of [...shown].sort((a, b) => cmtSortKey(a).localeCompare(cmtSortKey(b)))) list.append(commentRow(c, true));
+    for (const c of [...openList].sort((a, b) => cmtSortKey(a).localeCompare(cmtSortKey(b)))) list.append(commentRow(c, true));
     cmtSection.append(list);
-  } else {
+  };
+  const appendDone = () => {
     // 해결 시각이 30분 안쪽으로 붙은 것끼리 한 번의 반영으로 묶는다. 최근 묶음만 펼친다.
-    const done = shown.map((c) => ({ c, t: resolvedAt(c) })).sort((a, b) => b.t.localeCompare(a.t));
+    const done = doneList.map((c) => ({ c, t: resolvedAt(c) })).sort((a, b) => b.t.localeCompare(a.t));
     const batches = [];
     for (const item of done) {
       const last = batches[batches.length - 1];
@@ -428,6 +432,24 @@ function renderIndex() {
         list);
       cmtSection.append(box);
     });
+  };
+  if (!state.comments.length) {
+    cmtSection.append(el('div', { class: 'empty', text: '아직 코멘트가 없습니다. 파일을 열고 줄을 누르면 그 줄에 코멘트를 남길 수 있습니다.' }));
+  } else if (state.cmtTab === 'open') {
+    if (openList.length) appendOpen();
+    else cmtSection.append(el('div', { class: 'empty', text: '열린 코멘트가 없습니다.' }));
+  } else if (state.cmtTab === 'done') {
+    if (doneList.length) appendDone();
+    else cmtSection.append(el('div', { class: 'empty', text: '해결된 코멘트가 없습니다.' }));
+  } else {
+    if (openList.length) {
+      cmtSection.append(el('h3', { class: 'cmt-sub', text: `열림 ${openList.length}` }));
+      appendOpen();
+    }
+    if (doneList.length) {
+      cmtSection.append(el('h3', { class: 'cmt-sub', text: `해결됨 ${doneList.length}` }));
+      appendDone();
+    }
   }
   main.append(cmtSection);
   main.append(el('section', { class: 'group', id: 'gresults', hidden: true }));
@@ -923,16 +945,17 @@ function paintThreads(f) {
     if (!row) { lost.push(...list); continue; }
     row.classList.add('has-cmt');
     // 접으면 스레드 전체를 숨기고 줄 오른쪽 말풍선으로 남긴다. 모두 해결된 스레드는 처음부터 접는다.
-    const foldKey = `${f.id}:${k}`;
-    const folded = state.threadFold.has(foldKey) ? state.threadFold.get(foldKey) : list.every((c) => c.done);
+    // 접힘은 사용자가 접은 스레드만, 코멘트 id 묶음으로 기억한다(줄 번호가 옮겨져도 유지, 새 코멘트가 달리면 다시 펼쳐짐).
+    const foldKey = list.map((c) => c.id).sort().join(',');
+    const folded = state.threadFold.has(foldKey);
     if (folded) {
       const open = list.filter((c) => !c.done).length;
       row.append(el('button', { type: 'button', class: `cmt-badge${open ? '' : ' done'}`, title: '코멘트 펼치기', 'aria-label': `코멘트 ${list.length}개 펼치기`,
-        onclick: (e) => { e.stopPropagation(); state.threadFold.set(foldKey, false); paintThreads(f); } }, `💬 ${list.length}`));
+        onclick: (e) => { e.stopPropagation(); setThreadFold(foldKey, false); paintThreads(f); } }, `💬 ${list.length}`));
       continue;
     }
     const anchor = row.nextElementSibling?.classList.contains('composer') ? row.nextElementSibling : row;
-    anchor.after(threadEl(list, null, row.dataset.code, () => { state.threadFold.set(foldKey, true); paintThreads(f); }));
+    anchor.after(threadEl(list, null, row.dataset.code, () => { setThreadFold(foldKey, true); paintThreads(f); }));
   }
   if (lost.length) diff.prepend(threadEl(lost, '이 diff 에서 줄을 찾지 못한 코멘트'));
   applyFolds();
@@ -993,8 +1016,13 @@ function threadEl(list, title, current, onFold) {
       if (!body) { ta.focus(); return; }
       if (!reply && body === (replyIndex !== null ? c.replies?.[replyIndex]?.body : c.body)) { close(c); return; }
       save.disabled = true; save.textContent = '저장 중';
+      // 쓰기 직후 스냅샷이 먼저 와서 스레드를 다시 그리면, 편집 중 상태라 같은 글이 담긴 편집기가 되살아나 한 번 더 눌리게 된다.
+      // 저장을 시작할 때 편집 상태를 끝내고, 실패하면 되돌린다.
+      const editing = state.editing;
+      state.editing = null;
       const now = new Date().toISOString();
-      const replies = Array.isArray(c.replies) ? c.replies : [];
+      const latest = state.comments.find((x) => x.id === c.id) || c;
+      const replies = Array.isArray(latest.replies) ? latest.replies : [];
       const patch = reply
         ? { replies: [...replies, { by: '나', body, at: now }], done: false }
         : replyIndex !== null
@@ -1002,8 +1030,10 @@ function threadEl(list, title, current, onFold) {
           : { body, editedAt: now };
       try {
         await state.db.collection('comments').doc(c.id).update(patch);
-        close({ ...c, ...patch });
+        if (node.isConnected) node.replaceWith(cmtView({ ...latest, ...patch }));
       } catch (e) {
+        state.editing = { ...editing, draft: body };
+        if (!node.isConnected) { flashNote(`저장하지 못했습니다(${e?.code || '오류'}).`); rerenderKeepingPlace(); return; }
         err.hidden = false;
         err.textContent = `저장하지 못했습니다(${e?.code || '오류'}). 다시 눌러 주세요.`;
         save.disabled = false; save.textContent = reply ? '답글 달기' : '저장';

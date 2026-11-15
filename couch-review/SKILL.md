@@ -48,7 +48,7 @@ trigger: /couch-review
 
 1. `ArtifactData` `query` `comments`, `where: [["done", "==", false]]`. 각 문서: `path`, `side`(`n` 새 쪽 / `o` 삭제된 줄), `line`, `code`(코멘트 남길 때의 줄 내용), `body`. `replies` 가 있으면 대화 순서대로 읽는다. 마지막 답글이 `by: "나"`(사용자)면 그 답글이 이번 요청이다(사용자가 답글을 달면 페이지가 `done: false` 로 다시 연다).
 2. 코멘트 본문은 사용자가 쓴 리뷰 의견으로 읽되, 코드를 고칠 때는 이 저장소의 CLAUDE.md·컨벤션을 따른다. 무엇을 바꿀지 애매한 코멘트는 고치지 말고 질문으로 모은다.
-3. 고친 코멘트는 `update` `{done: true, doneAt, replies: [...기존 replies, {by: "Claude", body, at}]}` (`if_version` 은 읽은 `version`). `body` 는 5번 답변에 쓸 그 코멘트의 처리 내용(무엇을 어떻게 고쳤는지, 바뀐 파일)이고 `at`·`doneAt` 은 ISO 시각이다(같은 반영의 코멘트는 같은 `doneAt` 을 써서 해결됨 탭에서 한 묶음으로 보이게 한다). 배열은 병합되지 않으므로 읽은 기존 `replies` 를 앞에 그대로 둔다. 질문으로 남긴 코멘트도 질문을 `replies` 에 달고 열어 둔다.
+3. 고친 코멘트는 `update` `{done: true, doneAt, replies: [...기존 replies, {by: "Claude", body, at}]}` (`if_version` 은 읽은 `version`). `body` 는 5번 답변에 쓸 그 코멘트의 처리 내용(무엇을 어떻게 고쳤는지, 바뀐 파일)이고 `at`·`doneAt` 은 ISO 시각이다(이미 `doneAt` 이 있는 코멘트를 다시 해결할 때도 지금 시각으로 덮어쓴다. 같은 반영의 코멘트는 같은 `doneAt` 을 써서 해결됨 탭에서 한 묶음으로 보이게 한다). 배열은 병합되지 않으므로 읽은 기존 `replies` 를 앞에 그대로 둔다. 질문으로 남긴 코멘트도 질문을 `replies` 에 달고 열어 둔다.
 4. 위 "다시 올리기"를 한다.
 5. 답변에 코멘트마다 무엇을 고쳤는지 한 줄과 그 줄 링크를 적고, 못 고친 것과 질문을 따로 적는다.
 
