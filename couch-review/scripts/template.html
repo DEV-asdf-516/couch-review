@@ -1011,6 +1011,8 @@ function threadEl(list, title, current, onFold) {
     const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ...(reply ? [el('div', { class: 'body', text: c.body }), ...replyEls(c)] : []), ta, err, el('div', { class: 'acts' }, cancel, save));
     const close = (next) => { state.editing = null; node.replaceWith(cmtView(next)); };
     cancel.addEventListener('click', () => close(c));
+    // 한글 입력 중 Enter 는 조합 확정이라 isComposing 일 때는 넘긴다.
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.shiftKey && !e.isComposing) { e.preventDefault(); if (!save.disabled) save.click(); } });
     save.addEventListener('click', async () => {
       const body = ta.value.trim();
       if (!body) { ta.focus(); return; }
@@ -1060,6 +1062,7 @@ function openComposer(f, side, line, code, row) {
   const cancel = el('button', { class: 'btn', type: 'button' }, '취소');
   const node = el('div', { class: 'composer', onclick: (e) => e.stopPropagation() }, ta, err, el('div', { class: 'acts' }, cancel, save));
   cancel.addEventListener('click', () => { node.remove(); state.composer = null; });
+  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.shiftKey && !e.isComposing) { e.preventDefault(); if (!save.disabled) save.click(); } });
   save.addEventListener('click', async () => {
     const body = ta.value.trim();
     if (!body) { ta.focus(); return; }
