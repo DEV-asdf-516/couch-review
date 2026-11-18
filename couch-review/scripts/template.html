@@ -178,12 +178,24 @@ h2 .undo { margin-left: auto; text-transform: none; letter-spacing: 0; }
 .ln.folded > .fd.can::before { content: "▸"; color: var(--accent); }
 .ln.folded > .c::after { content: "⋯"; color: var(--muted); background: var(--hunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
 .ln.delmark { box-shadow: inset 0 2px var(--del-ink); }
+.ln.readmark { box-shadow: inset 0 2px var(--fn); }
+.ln > .bm { position: absolute; left: 0; top: 0; z-index: 1; display: none; align-items: center; justify-content: center; width: 3.6ch; height: 1.55em; padding: 0; border: 0; background: var(--surface); color: var(--muted); cursor: pointer; }
+.ln.add > .bm { background: var(--add-num); } .ln.del > .bm { background: var(--del-num); }
+@media (hover: hover) { .ln:hover > .bm { display: flex; } .ln > .bm:hover { color: var(--accent); } }
+.ln.bm-show > .bm, .ln > .bm:focus-visible { display: flex; }
+.ln.pin > .bm { display: flex; color: var(--accent); --bm-fill: var(--accent); }
 .ln:hover > .c { box-shadow: inset 2px 0 var(--accent); }
 .ln.has-cmt > .n, .ln.has-cmt > .o { box-shadow: inset -3px 0 var(--accent); }
 .ln { position: relative; }
 .cmt-badge { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); z-index: 1; font-family: var(--ui); font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 99px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; cursor: pointer; }
 .cmt-badge.done { border-color: var(--line); background: var(--hunk); color: var(--muted); font-weight: 400; }
-.nowrap .cmt-badge { position: sticky; right: 6px; transform: none; grid-column: 4; grid-row: 1; justify-self: end; align-self: center; }
+/* 가로 스크롤에서는 말풍선을 코드 위에 띄우면 글자를 가리므로, 그 줄에만 코드 뒤 칸을 하나 더 두어 거기에 놓는다. */
+.nowrap .ln:has(> .cmt-badge) { grid-template-columns: 3.6ch 3.6ch 1.6em max-content auto; }
+.diff.nodel.nowrap .ln:has(> .cmt-badge) { grid-template-columns: 3.6ch 1.6em max-content auto; }
+.nowrap .ln > .c { grid-column: 4; grid-row: 1; }
+.diff.nodel.nowrap .ln > .c { grid-column: 3; }
+.nowrap .cmt-badge { position: static; transform: none; grid-column: 5; grid-row: 1; justify-self: start; align-self: center; margin-right: 6px; }
+.diff.nodel.nowrap .cmt-badge { grid-column: 4; }
 .ln:has(> .cmt-badge) > .c { padding-right: 64px; }
 .nowrap .ln:has(> .cmt-badge) > .c { padding-right: 10px; }
 .ln.flash { animation: flash 2.4s ease-out; }
@@ -282,6 +294,11 @@ const LANG = { ts: 'typescript', mts: 'typescript', js: 'javascript', mjs: 'java
 
 const state = { comments: [], reviewed: new Set(), stale: new Set(), db: null, dbNote: '', readOnly: false, wrap: true, full: true, del: true, composer: null, onIndex: true, indexY: 0, bulk: false, undo: null, theme: 'auto', editing: null, checksExist: false, collapsed: new Set(), ranges: [], cmtFold: new Map(), threadFold: new Set(), cmtTab: 'all', cmtOpen: new Set(), batchOpen: new Map() };
 const CHECKS_DOC = 'checks/all';
+const MARKS_DOC = 'marks/all';
+// 터치 기기는 hover 가 없어 줄을 누르면 코멘트 입력칸이 함께 열리므로, 줄 번호를 누를 때만 책갈피 아이콘을 띄운다.
+const NO_HOVER = window.matchMedia('(hover: none)');
+const BOOKMARK_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 3h12v18l-6-4.5L6 21z" fill="var(--bm-fill, none)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+Object.assign(state, { marks: {}, marksExist: false, marksLoaded: false, markArmed: false });
 try { state.wrap = localStorage.getItem('wrap') !== '0'; state.full = localStorage.getItem('mode') !== 'changes'; state.del = localStorage.getItem('del') !== '0'; state.theme = localStorage.getItem('theme') || 'auto'; state.threadFold = new Set(JSON.parse(localStorage.getItem('threadFold') || '[]')); } catch {}
 const THEME_LABEL = { auto: '자동', light: '라이트', dark: '다크' };
 const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
@@ -343,8 +360,9 @@ function progressBar() {
 }
 
 const cmtSortKey = (c) => c.path + c.side + String(c.line).padStart(6, '0');
-// 해결 시각: doneAt 과 답글 시각 중 가장 늦은 것. 다시 열렸다 답글로 다시 해결된 코멘트가 옛 doneAt 에 묶여 예전 묶음에 남지 않게 한다.
-const resolvedAt = (c) => [c.doneAt, ...(Array.isArray(c.replies) ? c.replies.map((r) => r?.at) : []), c.at].filter(Boolean).sort().pop() || '';
+// 해결 시각은 doneAt 만 본다. 답글 시각까지 보면 해결된 코멘트에 Claude 가 정정만 덧붙여도 최근 반영 묶음으로 올라온다.
+// 다시 열렸다 해결되면 해결하는 쪽이 doneAt 을 새로 쓴다.
+const resolvedAt = (c) => c.doneAt || c.at || '';
 function setThreadFold(key, folded) {
   if (folded) state.threadFold.add(key); else state.threadFold.delete(key);
   try { localStorage.setItem('threadFold', JSON.stringify([...state.threadFold])); } catch {}
@@ -411,12 +429,12 @@ function renderIndex() {
     cmtSection.append(list);
   };
   const appendDone = () => {
-    // 해결 시각이 30분 안쪽으로 붙은 것끼리 한 번의 반영으로 묶는다. 최근 묶음만 펼친다.
+    // 한 번의 반영은 같은 doneAt 을 쓰므로 해결 시각이 1분 안쪽인 것끼리만 묶는다. 체인으로 길게 이으면 연달아 한 반영들이 한 묶음으로 뭉친다. 최근 묶음만 펼친다.
     const done = doneList.map((c) => ({ c, t: resolvedAt(c) })).sort((a, b) => b.t.localeCompare(a.t));
     const batches = [];
     for (const item of done) {
       const last = batches[batches.length - 1];
-      if (last && Date.parse(last.items[last.items.length - 1].t) - Date.parse(item.t) <= 30 * 60 * 1000) last.items.push(item);
+      if (last && Date.parse(last.items[last.items.length - 1].t) - Date.parse(item.t) <= 60 * 1000) last.items.push(item);
       else batches.push({ items: [item] });
     }
     batches.forEach((batch, i) => {
@@ -560,6 +578,7 @@ function renderFile(route) {
       el('button', { class: `btn${state.wrap ? ' on' : ''}`, type: 'button', onclick: toggleWrap }, '줄바꿈'),
       f.status === 'D' || f.ctx ? null : el('button', { class: `btn${state.del ? ' on' : ''}`, type: 'button', onclick: toggleDel, title: '끄면 지운 줄 자리에 빨간 선만 남습니다' }, '지운 줄'),
       themeButton(),
+      el('button', { class: 'btn', id: 'pin-btn', type: 'button', hidden: !resolveMark(f, state.marks[f.id]?.pin), onclick: () => goToMark(f, 'pin') }, '책갈피'),
       f.ctx ? null : el('button', { class: `btn${done ? ' on' : ''}`, id: 'rv-btn', type: 'button', onclick: () => toggleReviewed(f), disabled: !state.db || state.readOnly }, done ? '✓ 확인함' : '확인'),
     ),
     el('div', { class: 'bar-row' },
@@ -597,6 +616,10 @@ function renderFile(route) {
   const lang = LANG[ext(f.path)];
   const keep = new Set(state.comments.filter((c) => c.fid === f.id).map((c) => lineKey(c.side, c.line)));
   if (route.line) keep.add(lineKey(route.side, route.line));
+  const pinAt = resolveMark(f, state.marks[f.id]?.pin);
+  if (pinAt) keep.add(pinAt.key);
+  clearTimeout(markTimer);
+  state.markArmed = false;
   state.ranges = f.hunks.map((h) => foldRanges(h.lines));
   const makeRow = (lines, i, hi) => {
     const [t, o, n, s] = lines[i];
@@ -617,7 +640,19 @@ function renderFile(route) {
       tabindex: 0,
     },
       el('span', { class: 'o', text: o || '' }),
-      el('span', { class: 'n', text: n || '' }));
+      el('span', { class: 'n', text: n || '' }),
+      el('button', {
+        class: 'bm', type: 'button', 'aria-label': '책갈피',
+        onkeydown: (e) => e.stopPropagation(),
+        onclick: (e) => {
+          e.stopPropagation();
+          row.classList.remove('bm-show');
+          const key = lineKey(side, line);
+          const on = resolveMark(f, state.marks[f.id]?.pin)?.key !== key;
+          saveMark(f, 'pin', on ? { key, code: s, at: new Date().toISOString() } : null);
+        },
+      }));
+    row.lastChild.innerHTML = BOOKMARK_ICON;
     const end = state.ranges[hi].get(i);
     const fd = el('span', { class: `fd${end === undefined ? '' : ' can'}`, 'aria-label': end === undefined ? null : '접기/펴기' });
     if (end !== undefined) fd.addEventListener('click', (e) => { e.stopPropagation(); toggleFold(f, hi, i); });
@@ -626,6 +661,11 @@ function renderFile(route) {
     code.innerHTML = highlight(s, lang) || ' ';
     row.append(code);
     row.addEventListener('click', (e) => {
+      if (NO_HOVER.matches && e.target.closest('.o, .n')) {
+        document.querySelectorAll('#diff .ln.bm-show').forEach((r) => { if (r !== row) r.classList.remove('bm-show'); });
+        row.classList.toggle('bm-show');
+        return;
+      }
       const name = t === '-' || window.getSelection()?.toString() ? null : wordAt(e.clientX, e.clientY);
       if (!name || !openRefs(f, line, name, row)) openComposer(f, side, line, s, row);
     });
@@ -673,6 +713,7 @@ function renderFile(route) {
 
   state.composer = null;
   paintThreads(f);
+  paintMarks(f);
 
   if (route.line) {
     const target = document.getElementById(`${f.id}-${route.side}${route.line}`);
@@ -680,10 +721,8 @@ function renderFile(route) {
       revealRow(target);
       requestAnimationFrame(() => { target.scrollIntoView({ block: 'center' }); target.classList.add('flash'); });
     }
-  } else if (!state.full) {
-    window.scrollTo(0, 0);
-  } else {
-    const first = $('#diff .ln.chg');
+  } else if (route.keepScroll !== undefined || !goToMark(f)) {
+    const first = state.full && $('#diff .ln.chg');
     if (first && route.keepScroll === undefined) requestAnimationFrame(() => { first.scrollIntoView({ block: 'start' }); updateJump(); });
     else window.scrollTo(0, 0);
   }
@@ -1008,7 +1047,15 @@ function threadEl(list, title, current, onFold) {
     const err = el('div', { class: 'err', hidden: true });
     const save = el('button', { class: 'btn primary', type: 'button' }, reply ? '답글 달기' : '저장');
     const cancel = el('button', { class: 'btn', type: 'button' }, '취소');
-    const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ...(reply ? [el('div', { class: 'body', text: c.body }), ...replyEls(c)] : []), ta, err, el('div', { class: 'acts' }, cancel, save));
+    const form = [ta, err, el('div', { class: 'acts' }, cancel, save)];
+    // 답글 수정은 목록 안 그 답글 자리에서 고친다. 새 답글처럼 맨 아래 입력창이 뜨면 어느 답글을 고치는지 놓친다.
+    const target = replyIndex !== null ? c.replies?.[replyIndex] : null;
+    const inner = reply
+      ? [el('div', { class: 'body', text: c.body }), ...replyEls(c), ...form]
+      : target
+        ? [el('div', { class: 'body', text: c.body }), ...replyEls(c, null, { index: replyIndex, node: el('div', { class: `reply ${target.by === '나' ? 'mine' : 'claude'}` }, el('span', { class: 'meta', text: `↳ ${target.by || 'Claude'} · 수정 중` }), ...form) })]
+        : form;
+    const node = el('div', { class: 'cmt editing', onclick: (e) => e.stopPropagation() }, ...inner);
     const close = (next) => { state.editing = null; node.replaceWith(cmtView(next)); };
     cancel.addEventListener('click', () => close(c));
     // 한글 입력 중 Enter 는 조합 확정이라 isComposing 일 때는 넘긴다.
@@ -1159,10 +1206,11 @@ function flashNote(text) {
   render();
 }
 
-function replyEls(c, acts) {
+function replyEls(c, acts, slot) {
   if (!Array.isArray(c.replies)) return [];
   const out = [];
   c.replies.forEach((r, i) => {
+    if (slot?.index === i) { out.push(slot.node); return; }
     if (!r || typeof r.body !== 'string') return;
     let del = null;
     if (acts) {
@@ -1289,6 +1337,77 @@ function rerenderKeepingPlace() {
   }
 }
 
+// 책갈피: 파일마다 직접 꽂은 pin 과 스크롤로 저절로 남는 auto 를 marks/all 한 문서에 둔다.
+// 다시 올리면 줄 번호가 밀리므로 줄 내용(code)을 함께 두고, 같은 번호의 내용이 다르면 내용이 같은 가장 가까운 줄로 옮겨 본다.
+function resolveMark(f, m) {
+  if (!m?.key) return null;
+  const want = Number(m.key.slice(1));
+  let exact = null;
+  let near = null;
+  let sameKey = null;
+  f.hunks.forEach((h, hi) => h.lines.forEach(([t, o, n, s], i) => {
+    const side = t === '-' ? 'o' : 'n';
+    const line = t === '-' ? o : n;
+    const at = { key: lineKey(side, line), hi, i, d: Math.abs(line - want) };
+    if (at.key === m.key) { sameKey = at; if (s === m.code) exact = at; }
+    else if (s === m.code && m.code?.trim() && side === m.key[0] && (!near || at.d < near.d)) near = at;
+  }));
+  return exact || near || sameKey;
+}
+function markRow(f, at, expand) {
+  if (!at) return null;
+  let row = document.getElementById(`${f.id}-${at.key}`);
+  if (!row && expand) {
+    [...document.querySelectorAll('#diff .fold')].find((b) => Number(b.dataset.h) === at.hi && at.i >= Number(b.dataset.from) && at.i < Number(b.dataset.to))?.click();
+    row = document.getElementById(`${f.id}-${at.key}`);
+  }
+  return row;
+}
+function paintMarks(f) {
+  document.querySelectorAll('#diff .ln.pin, #diff .ln.readmark').forEach((r) => r.classList.remove('pin', 'readmark'));
+  const m = state.marks[f.id];
+  markRow(f, resolveMark(f, m?.pin))?.classList.add('pin');
+  markRow(f, resolveMark(f, m?.auto))?.classList.add('readmark');
+  const btn = $('#pin-btn');
+  if (btn) btn.hidden = !resolveMark(f, m?.pin);
+}
+function goToMark(f, only) {
+  const m = state.marks[f.id];
+  const row = markRow(f, resolveMark(f, m?.pin), true) || (only ? null : markRow(f, resolveMark(f, m?.auto), true));
+  if (!row) return false;
+  revealRow(row);
+  requestAnimationFrame(() => { row.scrollIntoView({ block: 'start' }); updateJump(); });
+  return true;
+}
+async function saveMark(f, kind, value) {
+  if (!state.db || state.readOnly) return;
+  if (!state.marksLoaded) { flashNote('책갈피를 아직 불러오는 중입니다. 잠시 뒤 다시 해 주세요.'); return; }
+  state.marks = { ...state.marks, [f.id]: { ...state.marks[f.id], [kind]: value } };
+  paintMarks(f);
+  const patch = { files: { [f.id]: { [kind]: value } } };
+  const ref = state.db.doc(MARKS_DOC);
+  try {
+    if (state.marksExist) await ref.update(patch);
+    else { state.marksExist = true; await ref.set(patch); }
+  } catch (e) { flashNote(`책갈피를 저장하지 못했습니다(${e?.code || '오류'}).`); }
+}
+// 파일을 열 때의 이동도 스크롤 이벤트를 내므로, 사용자가 직접 움직인 뒤부터만 읽은 자리로 기록한다.
+let markTimer = 0;
+for (const type of ['wheel', 'touchstart', 'keydown', 'mousedown']) window.addEventListener(type, () => { state.markArmed = true; }, { passive: true });
+window.addEventListener('scroll', () => {
+  if (state.onIndex || !state.markArmed) return;
+  clearTimeout(markTimer);
+  markTimer = setTimeout(() => {
+    const f = currentFile();
+    if (!f) return;
+    const top = changeTop();
+    const row = [...document.querySelectorAll('#diff .ln:not([hidden])')].find((r) => r.getBoundingClientRect().top >= top - 2);
+    const prev = state.marks[f.id]?.auto;
+    if (!row || (prev?.key === row.dataset.key && prev?.code === row.dataset.code)) return;
+    saveMark(f, 'auto', { key: row.dataset.key, code: row.dataset.code, at: new Date().toISOString() });
+  }, 1200);
+}, { passive: true });
+
 // 파일을 그린 뒤의 스크롤은 목록 위치가 아니므로 목록을 보는 동안만 기록한다.
 window.addEventListener('scroll', () => { if (state.onIndex) state.indexY = window.scrollY; }, { passive: true });
 // 페이지가 프레임 안에서 열려 history.back() 이 듣지 않으므로, 해시 이동 기록을 직접 쌓아 "뒤로"에 쓴다.
@@ -1336,6 +1455,16 @@ render();
     state.stale = new Set(marked.filter((f) => !state.reviewed.has(f.id)).map((f) => f.id));
     settle(snap);
     rerenderKeepingPlace();
+  }, fail);
+  db.doc(MARKS_DOC).onSnapshot((snap) => {
+    state.marksExist = snap.exists;
+    state.marks = (snap.exists && snap.data().files) || {};
+    const first = !state.marksLoaded;
+    state.marksLoaded = true;
+    const f = currentFile();
+    if (!f) return;
+    if (first && !parseHash().line && !state.markArmed) goToMark(f);
+    paintMarks(f);
   }, fail);
   rerenderKeepingPlace();
 })();
